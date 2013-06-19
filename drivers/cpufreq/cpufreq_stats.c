@@ -684,44 +684,9 @@ static int cpufreq_stat_notifier_trans(struct notifier_block *nb,
 	return 0;
 }
 
-static int cpufreq_stats_create_table_cpu(unsigned int cpu)
-{
-	struct cpufreq_policy *policy;
-	struct cpufreq_frequency_table *table;
-	int i, count, cpu_num, ret = -ENODEV;
 
-	policy = cpufreq_cpu_get(cpu);
-	if (!policy)
-		return -ENODEV;
+static int cpufreq_stat_cpu_callback(struct notifier_block *nfb,
 
-	table = cpufreq_frequency_get_table(cpu);
-	if (!table)
-		goto out;
-
-	count = 0;
-	for (i = 0; table[i].frequency != CPUFREQ_TABLE_END; i++) {
-		unsigned int freq = table[i].frequency;
-
-		if (freq != CPUFREQ_ENTRY_INVALID)
-			count++;
-	}
-
-	if (!per_cpu(all_cpufreq_stats, cpu))
-		cpufreq_allstats_create(cpu, table, count);
-
-	for_each_possible_cpu(cpu_num) {
-		if (!per_cpu(cpufreq_power_stats, cpu_num))
-			cpufreq_powerstats_create(cpu_num, table, count);
-	}
-
-	ret = cpufreq_stats_create_table(policy, table, count);
-
-out:
-	cpufreq_cpu_put(policy);
-	return ret;
-}
-
-static int __cpuinit cpufreq_stat_cpu_callback(struct notifier_block *nfb,
 					       unsigned long action,
 					       void *hcpu)
 {
