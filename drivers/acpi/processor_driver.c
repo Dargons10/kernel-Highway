@@ -420,8 +420,12 @@ static void acpi_processor_notify(struct acpi_device *device, u32 event)
 	return;
 }
 
+
+static int __acpi_processor_start(struct acpi_device *device);
+
 static int acpi_cpu_soft_notify(struct notifier_block *nfb,
-		unsigned long action, void *hcpu)
+					  unsigned long action, void *hcpu)
+
 {
 	unsigned int cpu = (unsigned long)hcpu;
 	struct acpi_processor *pr = per_cpu(processors, cpu);
@@ -456,15 +460,9 @@ static struct notifier_block acpi_cpu_notifier =
 	    .notifier_call = acpi_cpu_soft_notify,
 };
 
-/*
- * acpi_processor_start() is called by the cpu_hotplug_notifier func:
- * acpi_cpu_soft_notify(). Getting it __cpuinit{data} is difficult, the
- * root cause seem to be that acpi_processor_uninstall_hotplug_notify()
- * is in the module_exit (__exit) func. Allowing acpi_processor_start()
- * to not be in __cpuinit section, but being called from __cpuinit funcs
- * via __ref looks like the right thing to do here.
- */
-static __ref int acpi_processor_start(struct acpi_processor *pr)
+
+static int __acpi_processor_start(struct acpi_device *device)
+
 {
 	struct acpi_device *device = per_cpu(processor_device_array, pr->id);
 	int result = 0;
@@ -518,6 +516,7 @@ err_power_exit:
 	return result;
 }
 
+<<<<<<< HEAD
 /*
  * Do not put anything in here which needs the core to be online.
  * For example MSR access or setting up things which check for cpuinfo_x86
@@ -525,6 +524,9 @@ err_power_exit:
  * Such things have to be put in and set up above in acpi_processor_start()
  */
 static int __cpuinit acpi_processor_add(struct acpi_device *device)
+=======
+static int acpi_processor_start(struct device *dev)
+>>>>>>> fe7bf106ebc2... acpi: delete __cpuinit usage from all acpi files
 {
 	struct acpi_processor *pr = NULL;
 	int result = 0;
