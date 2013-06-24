@@ -2327,7 +2327,9 @@ out:
 static void reg_timeout_work(struct work_struct *work)
 {
 	REG_DBG_PRINT("Timeout while waiting for CRDA to reply, restoring regulatory settings\n");
+	rtnl_lock();
 	restore_regulatory_settings(true);
+	rtnl_unlock();
 }
 
 int __init regulatory_init(void)
