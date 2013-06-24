@@ -83,6 +83,9 @@ static inline int reinstall_suspended_bps(struct pt_regs *regs)
 }
 #endif
 
+int aarch32_break_handler(struct pt_regs *regs);
+
+
 #endif	/* __ASSEMBLY */
 #endif	/* __KERNEL__ */
 #endif	/* __ASM_DEBUG_MONITORS_H */
