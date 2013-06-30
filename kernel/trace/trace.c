@@ -1225,14 +1225,13 @@ void tracing_reset_online_cpus(struct trace_buffer *buf)
 	ring_buffer_record_enable(buffer);
 }
 
-<<<<<<< HEAD
-=======
+
 void tracing_reset_current(int cpu)
 {
 	tracing_reset(&global_trace.trace_buffer, cpu);
 }
 
->>>>>>> 09d8091c024e... tracing: Remove locking trace_types_lock from tracing_reset_all_online_cpus()
+
 /* Must have trace_types_lock held */
 void tracing_reset_all_online_cpus(void)
 {
