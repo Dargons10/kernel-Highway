@@ -434,7 +434,9 @@ static int correct_chipset(struct atyfb_par *par)
 	const char *name;
 	int i;
 
-	for (i = ARRAY_SIZE(aty_chips) - 1; i >= 0; i--)
+
+	for (i = (int)ARRAY_SIZE(aty_chips) - 1; i >= 0; i--)
+
 		if (par->pci_id == aty_chips[i].pci_id)
 			break;
 
