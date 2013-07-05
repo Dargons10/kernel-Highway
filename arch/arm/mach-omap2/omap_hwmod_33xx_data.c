@@ -705,6 +705,7 @@ static struct omap_hwmod am33xx_cpgmac0_hwmod = {
 	.flags		= (HWMOD_SWSUP_SIDLE | HWMOD_SWSUP_MSTANDBY),
 	.mpu_irqs	= am33xx_cpgmac0_irqs,
 	.main_clk	= "cpsw_125mhz_gclk",
+	.mpu_rt_idx	= 1,
 	.prcm		= {
 		.omap4	= {
 			.clkctrl_offs	= AM33XX_CM_PER_CPGMAC0_CLKCTRL_OFFSET,
