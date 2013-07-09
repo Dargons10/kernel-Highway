@@ -3888,6 +3888,94 @@ static const struct pinmux_irq pinmux_irqs[] = {
 	PINMUX_IRQ(EXT_IRQ16L(9), 308),
 };
 
+/* -----------------------------------------------------------------------------
+ * VCCQ MC0 regulator
+ */
+
+static void sh73a0_vccq_mc0_endisable(struct regulator_dev *reg, bool enable)
+{
+	struct sh_pfc *pfc = reg->reg_data;
+	void __iomem *addr = pfc->window[1].virt + 4;
+	unsigned long flags;
+	u32 value;
+
+	spin_lock_irqsave(&pfc->lock, flags);
+
+	value = ioread32(addr);
+
+	if (enable)
+		value |= BIT(28);
+	else
+		value &= ~BIT(28);
+
+	iowrite32(value, addr);
+
+	spin_unlock_irqrestore(&pfc->lock, flags);
+}
+
+static int sh73a0_vccq_mc0_enable(struct regulator_dev *reg)
+{
+	sh73a0_vccq_mc0_endisable(reg, true);
+	return 0;
+}
+
+static int sh73a0_vccq_mc0_disable(struct regulator_dev *reg)
+{
+	sh73a0_vccq_mc0_endisable(reg, false);
+	return 0;
+}
+
+static int sh73a0_vccq_mc0_is_enabled(struct regulator_dev *reg)
+{
+	struct sh_pfc *pfc = reg->reg_data;
+	void __iomem *addr = pfc->window[1].virt + 4;
+	unsigned long flags;
+	u32 value;
+
+	spin_lock_irqsave(&pfc->lock, flags);
+	value = ioread32(addr);
+	spin_unlock_irqrestore(&pfc->lock, flags);
+
+	return !!(value & BIT(28));
+}
+
+static int sh73a0_vccq_mc0_get_voltage(struct regulator_dev *reg)
+{
+	return 3300000;
+}
+
+static struct regulator_ops sh73a0_vccq_mc0_ops = {
+	.enable = sh73a0_vccq_mc0_enable,
+	.disable = sh73a0_vccq_mc0_disable,
+	.is_enabled = sh73a0_vccq_mc0_is_enabled,
+	.get_voltage = sh73a0_vccq_mc0_get_voltage,
+};
+
+static const struct regulator_desc sh73a0_vccq_mc0_desc = {
+	.owner = THIS_MODULE,
+	.name = "vccq_mc0",
+	.type = REGULATOR_VOLTAGE,
+	.ops = &sh73a0_vccq_mc0_ops,
+};
+
+static struct regulator_consumer_supply sh73a0_vccq_mc0_consumers[] = {
+	REGULATOR_SUPPLY("vqmmc", "sh_mobile_sdhi.0"),
+	REGULATOR_SUPPLY("vqmmc", "ee100000.sdhi"),
+};
+
+static const struct regulator_init_data sh73a0_vccq_mc0_init_data = {
+	.constraints = {
+		.valid_ops_mask = REGULATOR_CHANGE_STATUS,
+	},
+	.num_consumer_supplies = ARRAY_SIZE(sh73a0_vccq_mc0_consumers),
+	.consumer_supplies = sh73a0_vccq_mc0_consumers,
+};
+
+/* -----------------------------------------------------------------------------
+ * Pin bias
+ */
+
+
 #define PORTnCR_PULMD_OFF	(0 << 6)
 #define PORTnCR_PULMD_DOWN	(2 << 6)
 #define PORTnCR_PULMD_UP	(3 << 6)
