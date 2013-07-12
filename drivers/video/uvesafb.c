@@ -1930,6 +1930,11 @@ static int uvesafb_setup(char *options)
 		}
 	}
 
+
+	if (mtrr != 3 && mtrr != 0)
+		pr_warn("uvesafb: mtrr should be set to 0 or 3; %d is unsupported", mtrr);
+
+
 	return 0;
 }
 #endif /* !MODULE */
