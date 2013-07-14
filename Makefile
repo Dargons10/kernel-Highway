@@ -1,8 +1,9 @@
 VERSION = 3
-PATCHLEVEL = 10
-SUBLEVEL = 108
-EXTRAVERSION =
-NAME = END-OF-LIFE
+PATCHLEVEL = 11
+SUBLEVEL = 0
+EXTRAVERSION = -rc1
+NAME = Linux for Workgroups
+
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
