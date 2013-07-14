@@ -272,6 +272,8 @@ int radeon_irq_kms_init(struct radeon_device *rdev)
 
 	INIT_WORK(&rdev->hotplug_work, radeon_hotplug_work_func);
 	INIT_WORK(&rdev->audio_work, r600_audio_update_hdmi);
+	INIT_WORK(&rdev->reset_work, radeon_irq_reset_work_func);
+
 
 	DRM_INFO("radeon: irq initialized.\n");
 	return 0;
