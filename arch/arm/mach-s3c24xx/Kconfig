@@ -204,6 +204,19 @@ config S3C24XX_GPIO_EXTRA128
 	  Add an extra 128 gpio numbers to the available GPIO pool. This is
 	  available for boards that need extra gpios for external devices.
 
+
+config S3C24XX_PLL
+	bool "Support CPUfreq changing of PLL frequency (EXPERIMENTAL)"
+	depends on ARM_S3C24XX_CPUFREQ
+	help
+	  Compile in support for changing the PLL frequency from the
+	  S3C24XX series CPUfreq driver. The PLL takes time to settle
+	  after a frequency change, so by default it is not enabled.
+
+	  This also means that the PLL tables for the selected CPU(s) will
+	  be built which may increase the size of the kernel image.
+
+
 # cpu frequency items common between s3c2410 and s3c2440/s3c2442
 
 config S3C2410_IOTIMING
