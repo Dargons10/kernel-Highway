@@ -1610,10 +1610,10 @@ static int dwc3_gadget_start(struct usb_gadget *g,
 err3:
 	__dwc3_gadget_ep_disable(dwc->eps[0]);
 
-err2:
+
+err0:
 	dwc->gadget_driver = NULL;
 
-err1:
 	spin_unlock_irqrestore(&dwc->lock, flags);
 
 	free_irq(irq, dwc);
