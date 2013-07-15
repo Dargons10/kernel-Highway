@@ -995,14 +995,6 @@ static void post_status(struct hv_dynmem_device *dm)
 	if (status.hdr.trans_id != atomic_read(&trans_id))
 		return;
 
-	/*
-	 * If the last post time that we sampled has changed,
-	 * we have raced, don't post the status.
-	 */
-	if (last_post != last_post_time)
-		return;
-
-	last_post_time = jiffies;
 	vmbus_sendpacket(dm->dev->channel, &status,
 				sizeof(struct dm_status),
 				(unsigned long)NULL,
