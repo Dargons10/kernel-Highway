@@ -962,6 +962,15 @@ static long macvtap_ioctl(struct file *file, unsigned int cmd,
 		dev_put(vlan->dev);
 		return ret;
 
+	case TUNSETQUEUE:
+		if (get_user(u, &ifr->ifr_flags))
+			return -EFAULT;
+		rtnl_lock();
+		ret = macvtap_ioctl_set_queue(file, u);
+		rtnl_unlock();
+		return ret;
+
+
 	case TUNGETFEATURES:
 		if (put_user(IFF_TAP | IFF_NO_PI | IFF_VNET_HDR, up))
 			return -EFAULT;
