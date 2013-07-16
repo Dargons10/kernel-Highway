@@ -1417,6 +1417,44 @@ static int sgtl5000_i2c_probe(struct i2c_client *client,
 	if (!sgtl5000)
 		return -ENOMEM;
 
+	sgtl5000->regmap = devm_regmap_init_i2c(client, &sgtl5000_regmap);
+	if (IS_ERR(sgtl5000->regmap)) {
+		ret = PTR_ERR(sgtl5000->regmap);
+		dev_err(&client->dev, "Failed to allocate regmap: %d\n", ret);
+		return ret;
+	}
+
+	sgtl5000->mclk = devm_clk_get(&client->dev, NULL);
+	if (IS_ERR(sgtl5000->mclk)) {
+		ret = PTR_ERR(sgtl5000->mclk);
+		dev_err(&client->dev, "Failed to get mclock: %d\n", ret);
+		/* Defer the probe to see if the clk will be provided later */
+		if (ret == -ENOENT)
+			return -EPROBE_DEFER;
+		return ret;
+	}
+
+	ret = clk_prepare_enable(sgtl5000->mclk);
+	if (ret)
+		return ret;
+
+	/* read chip information */
+	ret = regmap_read(sgtl5000->regmap, SGTL5000_CHIP_ID, &reg);
+	if (ret)
+		goto disable_clk;
+
+	if (((reg & SGTL5000_PARTID_MASK) >> SGTL5000_PARTID_SHIFT) !=
+	    SGTL5000_PARTID_PART_ID) {
+		dev_err(&client->dev,
+			"Device with ID register %x is not a sgtl5000\n", reg);
+		ret = -ENODEV;
+		goto disable_clk;
+	}
+
+	rev = (reg & SGTL5000_REVID_MASK) >> SGTL5000_REVID_SHIFT;
+	dev_info(&client->dev, "sgtl5000 revision 0x%x\n", rev);
+
+
 	i2c_set_clientdata(client, sgtl5000);
 
 	ret = snd_soc_register_codec(&client->dev,
