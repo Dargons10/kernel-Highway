@@ -1286,14 +1286,12 @@ static int fuse_direntplus_link(struct file *file,
 		inode = dentry->d_inode;
 		if (!inode) {
 			d_drop(dentry);
-		} else if (get_node_id(inode) != o->nodeid ||
-			   ((o->attr.mode ^ inode->i_mode) & S_IFMT)) {
+
+		} else if (get_node_id(inode) != o->nodeid) {
 			err = d_invalidate(dentry);
 			if (err)
 				goto out;
-		} else if (is_bad_inode(inode)) {
-			err = -EIO;
-			goto out;
+
 		} else {
 			struct fuse_inode *fi;
 			fi = get_fuse_inode(inode);
