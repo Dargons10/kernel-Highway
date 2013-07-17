@@ -251,6 +251,7 @@ static int mei_me_hw_ready_wait(struct mei_device *dev)
 {
 	int err;
 
+	dev->recvd_hw_ready = false;
 	mutex_unlock(&dev->device_lock);
 	err = wait_event_interruptible_timeout(dev->wait_hw_ready,
 			dev->recvd_hw_ready,
