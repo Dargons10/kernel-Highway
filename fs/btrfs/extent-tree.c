@@ -7495,7 +7495,9 @@ out:
 	 */
 	if (root_dropped == false)
 		btrfs_add_dead_root(root);
-	if (err && err != -EAGAIN)
+
+	if (err)
+
 		btrfs_std_error(root->fs_info, err);
 	return err;
 }
