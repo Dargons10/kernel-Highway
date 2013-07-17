@@ -977,6 +977,7 @@ static void encode_attrs(struct xdr_stream *xdr, const struct iattr *iap, const 
 	__be32 *p;
 	__be32 *q;
 	int len;
+	uint32_t bmval_len = 2;
 	uint32_t bmval0 = 0;
 	uint32_t bmval1 = 0;
 
@@ -987,7 +988,9 @@ static void encode_attrs(struct xdr_stream *xdr, const struct iattr *iap, const 
 	 *          = 36 bytes, plus any contribution from variable-length fields
 	 *            such as owner/group.
 	 */
-	len = 16;
+
+	len = 8;
+
 
 	/* Sigh */
 	if (iap->ia_valid & ATTR_SIZE)
@@ -1025,15 +1028,24 @@ static void encode_attrs(struct xdr_stream *xdr, const struct iattr *iap, const 
 		len += 16;
 	else if (iap->ia_valid & ATTR_MTIME)
 		len += 4;
+	if (label) {
+		len += 4 + 4 + 4 + (XDR_QUADLEN(label->len) << 2);
+		bmval_len = 3;
+	}
+
+	len += bmval_len << 2;
 	p = reserve_space(xdr, len);
 
 	/*
 	 * We write the bitmap length now, but leave the bitmap and the attribute
 	 * buffer length to be backfilled at the end of this routine.
 	 */
-	*p++ = cpu_to_be32(2);
+
+	*p++ = cpu_to_be32(bmval_len);
 	q = p;
-	p += 3;
+	/* Skip bitmap entries + attrlen */
+	p += bmval_len + 1;
+
 
 	if (iap->ia_valid & ATTR_SIZE) {
 		bmval0 |= FATTR4_WORD0_SIZE;
@@ -1080,9 +1092,13 @@ static void encode_attrs(struct xdr_stream *xdr, const struct iattr *iap, const 
 				len, ((char *)p - (char *)q) + 4);
 		BUG();
 	}
-	len = (char *)p - (char *)q - 12;
+
+	len = (char *)p - (char *)q - (bmval_len << 2);
 	*q++ = htonl(bmval0);
 	*q++ = htonl(bmval1);
+	if (bmval_len == 3)
+		*q++ = htonl(bmval2);
+
 	*q = htonl(len);
 
 /* out: */
