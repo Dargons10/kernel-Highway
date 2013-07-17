@@ -7952,9 +7952,66 @@ intel_modeset_check_state(struct drm_device *dev)
 		     "crtc active state doesn't match with hw state "
 		     "(expected %i, found %i)\n", crtc->active, active);
 
-		WARN(active &&
-		     !intel_pipe_config_compare(&crtc->config, &pipe_config),
-		     "pipe state doesn't match!\n");
+
+		if (active &&
+		    !intel_pipe_config_compare(dev, &crtc->config, &pipe_config)) {
+			WARN(1, "pipe state doesn't match!\n");
+			intel_dump_pipe_config(crtc, &pipe_config,
+					       "[hw state]");
+			intel_dump_pipe_config(crtc, &crtc->config,
+					       "[sw state]");
+		}
+	}
+}
+
+static void
+check_shared_dpll_state(struct drm_device *dev)
+{
+	drm_i915_private_t *dev_priv = dev->dev_private;
+	struct intel_crtc *crtc;
+	struct intel_dpll_hw_state dpll_hw_state;
+	int i;
+
+	for (i = 0; i < dev_priv->num_shared_dpll; i++) {
+		struct intel_shared_dpll *pll = &dev_priv->shared_dplls[i];
+		int enabled_crtcs = 0, active_crtcs = 0;
+		bool active;
+
+		memset(&dpll_hw_state, 0, sizeof(dpll_hw_state));
+
+		DRM_DEBUG_KMS("%s\n", pll->name);
+
+		active = pll->get_hw_state(dev_priv, pll, &dpll_hw_state);
+
+		WARN(pll->active > pll->refcount,
+		     "more active pll users than references: %i vs %i\n",
+		     pll->active, pll->refcount);
+		WARN(pll->active && !pll->on,
+		     "pll in active use but not on in sw tracking\n");
+		WARN(pll->on && !pll->active,
+		     "pll in on but not on in use in sw tracking\n");
+		WARN(pll->on != active,
+		     "pll on state mismatch (expected %i, found %i)\n",
+		     pll->on, active);
+
+		list_for_each_entry(crtc, &dev->mode_config.crtc_list,
+				    base.head) {
+			if (crtc->base.enabled && intel_crtc_to_shared_dpll(crtc) == pll)
+				enabled_crtcs++;
+			if (crtc->active && intel_crtc_to_shared_dpll(crtc) == pll)
+				active_crtcs++;
+		}
+		WARN(pll->active != active_crtcs,
+		     "pll active crtcs mismatch (expected %i, found %i)\n",
+		     pll->active, active_crtcs);
+		WARN(pll->refcount != enabled_crtcs,
+		     "pll enabled crtcs mismatch (expected %i, found %i)\n",
+		     pll->refcount, enabled_crtcs);
+
+		WARN(pll->on && memcmp(&pll->hw_state, &dpll_hw_state,
+				       sizeof(dpll_hw_state)),
+		     "pll hw state mismatch\n");
+>
 	}
 }
 
@@ -9381,6 +9438,24 @@ setup_pipes:
 	if (HAS_DDI(dev))
 		intel_ddi_setup_hw_pll_state(dev);
 
+
+	for (i = 0; i < dev_priv->num_shared_dpll; i++) {
+		struct intel_shared_dpll *pll = &dev_priv->shared_dplls[i];
+
+		pll->on = pll->get_hw_state(dev_priv, pll, &pll->hw_state);
+		pll->active = 0;
+		list_for_each_entry(crtc, &dev->mode_config.crtc_list,
+				    base.head) {
+			if (crtc->active && intel_crtc_to_shared_dpll(crtc) == pll)
+				pll->active++;
+		}
+		pll->refcount = pll->active;
+
+		DRM_DEBUG_KMS("%s hw state readout: refcount %i, on %i\n",
+			      pll->name, pll->refcount, pll->on);
+	}
+
+
 	list_for_each_entry(encoder, &dev->mode_config.encoder_list,
 			    base.head) {
 		pipe = 0;
@@ -9416,6 +9491,23 @@ setup_pipes:
 			      connector->base.encoder ? "enabled" : "disabled");
 	}
 
+}
+
+/* Scan out the current hw modeset state, sanitizes it and maps it into the drm
+ * and i915 state tracking structures. */
+void intel_modeset_setup_hw_state(struct drm_device *dev,
+				  bool force_restore)
+{
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	enum pipe pipe;
+	struct drm_plane *plane;
+	struct intel_crtc *crtc;
+	struct intel_encoder *encoder;
+	int i;
+
+	intel_modeset_readout_hw_state(dev);
+
+
 	/* HW state is read out, now we need to sanitize this mess. */
 	list_for_each_entry(encoder, &dev->mode_config.encoder_list,
 			    base.head) {
@@ -9425,6 +9517,18 @@ setup_pipes:
 	for_each_pipe(pipe) {
 		crtc = to_intel_crtc(dev_priv->pipe_to_crtc_mapping[pipe]);
 		intel_sanitize_crtc(crtc);
+	}
+
+	for (i = 0; i < dev_priv->num_shared_dpll; i++) {
+		struct intel_shared_dpll *pll = &dev_priv->shared_dplls[i];
+
+		if (!pll->on || pll->active)
+			continue;
+
+		DRM_DEBUG_KMS("%s enabled but not in use, disabling\n", pll->name);
+
+		pll->disable(dev_priv, pll);
+		pll->on = false;
 	}
 
 	if (force_restore) {
