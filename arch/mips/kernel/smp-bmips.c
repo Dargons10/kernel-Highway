@@ -157,7 +157,11 @@ static void bmips_boot_secondary(int cpu, struct task_struct *idle)
 		bmips_send_ipi_single(cpu, 0);
 	else {
 #if defined(CONFIG_CPU_BMIPS4350) || defined(CONFIG_CPU_BMIPS4380)
-		set_c0_brcm_cmt_ctrl(0x01);
+
+		/* Reset slave TP1 if booting from TP0 */
+		if (cpu_logical_map(cpu) == 1)
+			set_c0_brcm_cmt_ctrl(0x01);
+
 #elif defined(CONFIG_CPU_BMIPS5000)
 		if (cpu & 0x01)
 			write_c0_brcm_action(ACTION_BOOT_THREAD(cpu));
