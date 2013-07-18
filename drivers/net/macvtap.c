@@ -658,8 +658,6 @@ static unsigned long iov_pages(const struct iovec *iv, int offset,
 	return pages;
 }
 
-/* Neighbour code has some assumptions on HH_DATA_MOD alignment */
-#define MACVTAP_RESERVE HH_DATA_OFF(ETH_HLEN)
 
 /* Get packet from user space buffer */
 static ssize_t macvtap_get_user(struct macvtap_queue *q, struct msghdr *m,
@@ -709,8 +707,11 @@ static ssize_t macvtap_get_user(struct macvtap_queue *q, struct msghdr *m,
 
 	if (m && m->msg_control && sock_flag(&q->sk, SOCK_ZEROCOPY)) {
 		copylen = vnet_hdr.hdr_len ? vnet_hdr.hdr_len : GOODCOPY_LEN;
+<<<<<<< HEAD
 		if (copylen > good_linear)
 			copylen = good_linear;
+=======
+>>>>>>> ece793fcfc41... macvtap: do not zerocopy if iov needs more pages than MAX_SKB_FRAGS
 		linear = copylen;
 		if (iov_pages(iv, vnet_hdr_len + copylen, count)
 		    <= MAX_SKB_FRAGS)
