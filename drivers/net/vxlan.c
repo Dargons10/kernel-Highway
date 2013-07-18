@@ -709,6 +709,27 @@ static void vxlan_igmp_leave(struct work_struct *work)
 	ip_mc_leave_group(sk, &mreq);
 
 	release_sock(sk);
+
+	vxlan_sock_release(vn, vs);
+	dev_put(vxlan->dev);
+}
+
+/* Inverse of vxlan_igmp_join when last VNI is brought down */
+static void vxlan_igmp_leave(struct work_struct *work)
+{
+	struct vxlan_dev *vxlan = container_of(work, struct vxlan_dev, igmp_leave);
+	struct vxlan_net *vn = net_generic(dev_net(vxlan->dev), vxlan_net_id);
+	struct vxlan_sock *vs = vxlan->vn_sock;
+	struct sock *sk = vs->sock->sk;
+	struct ip_mreqn mreq = {
+		.imr_multiaddr.s_addr	= vxlan->default_dst.remote_ip,
+		.imr_ifindex		= vxlan->default_dst.remote_ifindex,
+	};
+
+	lock_sock(sk);
+	ip_mc_leave_group(sk, &mreq);
+
+	release_sock(sk);
 	rtnl_lock();
 
 	return err;
@@ -1299,7 +1320,6 @@ static int vxlan_stop(struct net_device *dev)
 {
 	struct vxlan_net *vn = net_generic(dev_net(dev), vxlan_net_id);
 	struct vxlan_dev *vxlan = netdev_priv(dev);
-
 
 	if (vs && IN_MULTICAST(ntohl(vxlan->default_dst.remote_ip)) &&
 	    ! vxlan_group_used(vn, vxlan->default_dst.remote_ip)) {
