@@ -117,6 +117,12 @@ struct vxlan_dev {
 	__u8		  ttl;
 	u32		  flags;	/* VXLAN_F_* below */
 
+
+	struct work_struct sock_work;
+	struct work_struct igmp_join;
+	struct work_struct igmp_leave;
+
+
 	unsigned long	  age_interval;
 	struct timer_list age_timer;
 	spinlock_t	  hash_lock;
@@ -607,7 +613,6 @@ static bool vxlan_snoop(struct net_device *dev,
 	return false;
 }
 
-
 /* See if multicast group is already in use by other ID */
 static bool vxlan_group_used(struct vxlan_net *vn,
 			     const struct vxlan_dev *this)
@@ -657,13 +662,17 @@ static int vxlan_join_group(struct net_device *dev)
 }
 
 
-/* kernel equivalent to IP_DROP_MEMBERSHIP */
-static int vxlan_leave_group(struct net_device *dev)
+/* Callback to update multicast group membership when first VNI on
+ * multicast asddress is brought up
+ * Done as workqueue because ip_mc_join_group acquires RTNL.
+ */
+static void vxlan_igmp_join(struct work_struct *work)
 {
-	struct vxlan_dev *vxlan = netdev_priv(dev);
-	struct vxlan_net *vn = net_generic(dev_net(dev), vxlan_net_id);
-	int err = 0;
-	struct sock *sk = vn->sock->sk;
+	struct vxlan_dev *vxlan = container_of(work, struct vxlan_dev, igmp_join);
+	struct vxlan_net *vn = net_generic(dev_net(vxlan->dev), vxlan_net_id);
+	struct vxlan_sock *vs = vxlan->vn_sock;
+	struct sock *sk = vs->sock->sk;
+
 	struct ip_mreqn mreq = {
 		.imr_multiaddr.s_addr	= vxlan->default_dst.remote_ip,
 		.imr_ifindex		= vxlan->default_dst.remote_ifindex,
@@ -676,7 +685,29 @@ static int vxlan_leave_group(struct net_device *dev)
 	/* Need to drop RTNL to call multicast leave */
 	rtnl_unlock();
 	lock_sock(sk);
-	err = ip_mc_leave_group(sk, &mreq);
+
+	ip_mc_join_group(sk, &mreq);
+	release_sock(sk);
+
+	vxlan_sock_release(vn, vs);
+	dev_put(vxlan->dev);
+}
+
+/* Inverse of vxlan_igmp_join when last VNI is brought down */
+static void vxlan_igmp_leave(struct work_struct *work)
+{
+	struct vxlan_dev *vxlan = container_of(work, struct vxlan_dev, igmp_leave);
+	struct vxlan_net *vn = net_generic(dev_net(vxlan->dev), vxlan_net_id);
+	struct vxlan_sock *vs = vxlan->vn_sock;
+	struct sock *sk = vs->sock->sk;
+	struct ip_mreqn mreq = {
+		.imr_multiaddr.s_addr	= vxlan->default_dst.remote_ip,
+		.imr_ifindex		= vxlan->default_dst.remote_ifindex,
+	};
+
+	lock_sock(sk);
+	ip_mc_leave_group(sk, &mreq);
+
 	release_sock(sk);
 	rtnl_lock();
 
@@ -1227,13 +1258,17 @@ static int vxlan_init(struct net_device *dev)
 /* Start ageing timer and join group when device is brought up */
 static int vxlan_open(struct net_device *dev)
 {
+	struct vxlan_net *vn = net_generic(dev_net(dev), vxlan_net_id);
 	struct vxlan_dev *vxlan = netdev_priv(dev);
 	int err;
 
-	if (IN_MULTICAST(ntohl(vxlan->default_dst.remote_ip))) {
-		err = vxlan_join_group(dev);
-		if (err)
-			return err;
+
+	if (IN_MULTICAST(ntohl(vxlan->default_dst.remote_ip)) &&
+	    ! vxlan_group_used(vn, vxlan->default_dst.remote_ip)) {
+		vxlan_sock_hold(vs);
+		dev_hold(dev);
+		queue_work(vxlan_wq, &vxlan->igmp_join);
+
 	}
 
 	if (vxlan->age_interval)
@@ -1262,10 +1297,17 @@ static void vxlan_flush(struct vxlan_dev *vxlan)
 /* Cleanup timer and forwarding table on shutdown */
 static int vxlan_stop(struct net_device *dev)
 {
+	struct vxlan_net *vn = net_generic(dev_net(dev), vxlan_net_id);
 	struct vxlan_dev *vxlan = netdev_priv(dev);
 
-	if (IN_MULTICAST(ntohl(vxlan->default_dst.remote_ip)))
-		vxlan_leave_group(dev);
+
+	if (vs && IN_MULTICAST(ntohl(vxlan->default_dst.remote_ip)) &&
+	    ! vxlan_group_used(vn, vxlan->default_dst.remote_ip)) {
+		vxlan_sock_hold(vs);
+		dev_hold(dev);
+		queue_work(vxlan_wq, &vxlan->igmp_leave);
+	}
+
 
 	del_timer_sync(&vxlan->age_timer);
 
@@ -1333,6 +1375,11 @@ static void vxlan_setup(struct net_device *dev)
 	dev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
 
 	spin_lock_init(&vxlan->hash_lock);
+
+	INIT_WORK(&vxlan->igmp_join, vxlan_igmp_join);
+	INIT_WORK(&vxlan->igmp_leave, vxlan_igmp_leave);
+	INIT_WORK(&vxlan->sock_work, vxlan_sock_work);
+
 
 	init_timer_deferrable(&vxlan->age_timer);
 	vxlan->age_timer.function = vxlan_cleanup;
