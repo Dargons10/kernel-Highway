@@ -353,7 +353,54 @@ static struct irq_chip msm_gpio_irq_chip = {
 
 static int msm_gpio_probe(struct platform_device *dev)
 {
-	int i, irq, ret;
+
+	irq_set_lockdep_class(irq, &msm_gpio_lock_class);
+	irq_set_chip_and_handler(irq, &msm_gpio_irq_chip,
+			handle_level_irq);
+	set_irq_flags(irq, IRQF_VALID);
+
+	return 0;
+}
+
+static const struct irq_domain_ops msm_gpio_irq_domain_ops = {
+	.xlate = irq_domain_xlate_twocell,
+	.map = msm_gpio_irq_domain_map,
+};
+
+static int msm_gpio_probe(struct platform_device *pdev)
+{
+	int ret, ngpio;
+	struct resource *res;
+
+	if (of_property_read_u32(pdev->dev.of_node, "ngpio", &ngpio)) {
+		dev_err(&pdev->dev, "%s: ngpio property missing\n", __func__);
+		return -EINVAL;
+	}
+
+	if (ngpio > MAX_NR_GPIO)
+		WARN(1, "ngpio exceeds the MAX_NR_GPIO. Increase MAX_NR_GPIO\n");
+
+	bitmap_zero(msm_gpio.enabled_irqs, MAX_NR_GPIO);
+	bitmap_zero(msm_gpio.wake_irqs, MAX_NR_GPIO);
+	bitmap_zero(msm_gpio.dual_edge_irqs, MAX_NR_GPIO);
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	msm_gpio.msm_tlmm_base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(msm_gpio.msm_tlmm_base))
+		return PTR_ERR(msm_gpio.msm_tlmm_base);
+
+	msm_gpio.gpio_chip.ngpio = ngpio;
+	msm_gpio.gpio_chip.label = pdev->name;
+	msm_gpio.gpio_chip.dev = &pdev->dev;
+	msm_gpio.gpio_chip.base = 0;
+	msm_gpio.gpio_chip.direction_input = msm_gpio_direction_input;
+	msm_gpio.gpio_chip.direction_output = msm_gpio_direction_output;
+	msm_gpio.gpio_chip.get = msm_gpio_get;
+	msm_gpio.gpio_chip.set = msm_gpio_set;
+	msm_gpio.gpio_chip.to_irq = msm_gpio_to_irq;
+	msm_gpio.gpio_chip.request = msm_gpio_request;
+	msm_gpio.gpio_chip.free = msm_gpio_free;
+
 
 	bitmap_zero(msm_gpio.enabled_irqs, NR_GPIO_IRQS);
 	bitmap_zero(msm_gpio.wake_irqs, NR_GPIO_IRQS);
