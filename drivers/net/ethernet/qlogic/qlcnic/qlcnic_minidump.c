@@ -893,6 +893,14 @@ flash_temp:
 
 	tmpl_hdr = ahw->fw_dump.tmpl_hdr;
 	tmpl_hdr->drv_cap_mask = QLCNIC_DUMP_MASK_DEF;
+
+
+	if ((tmpl_hdr->version & 0xfffff) >= 0x20001)
+		ahw->fw_dump.use_pex_dma = true;
+	else
+		ahw->fw_dump.use_pex_dma = false;
+
+
 	ahw->fw_dump.enable = 1;
 
 	return 0;
