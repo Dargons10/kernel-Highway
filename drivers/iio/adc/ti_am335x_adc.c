@@ -45,7 +45,9 @@ static void tiadc_writel(struct tiadc_device *adc, unsigned int reg,
 static void tiadc_step_config(struct tiadc_device *adc_dev)
 {
 	unsigned int stepconfig;
-	int i, channels = 0, steps;
+
+	int i, steps;
+
 
 	/*
 	 * There are 16 configurable steps and 8 analog input
@@ -69,7 +71,9 @@ static void tiadc_step_config(struct tiadc_device *adc_dev)
 				STEPCONFIG_OPENDLY);
 		channels++;
 	}
-	tiadc_writel(adc_dev, REG_SE, STPENB_STEPENB);
+
+
+
 }
 
 static int tiadc_channel_init(struct iio_dev *indio_dev, int channels)
@@ -107,8 +111,24 @@ static int tiadc_read_raw(struct iio_dev *indio_dev,
 		int *val, int *val2, long mask)
 {
 	struct tiadc_device *adc_dev = iio_priv(indio_dev);
-	int i;
-	unsigned int fifo1count, readx1;
+
+	int i, map_val;
+	unsigned int fifo1count, read, stepid;
+	u32 step = UINT_MAX;
+	bool found = false;
+	u32 step_en;
+	unsigned long timeout = jiffies + usecs_to_jiffies
+				(IDLE_TIMEOUT * adc_dev->channels);
+	step_en = get_adc_step_mask(adc_dev);
+	am335x_tsc_se_set(adc_dev->mfd_tscadc, step_en);
+
+	/* Wait for ADC sequencer to complete sampling */
+	while (tiadc_readl(adc_dev, REG_ADCFSM) & SEQ_STATUS) {
+		if (time_after(jiffies, timeout))
+			return -EAGAIN;
+		}
+	map_val = chan->channel + TOTAL_CHANNELS;
+
 
 	/*
 	 * When the sub-system is first enabled,
@@ -123,11 +143,20 @@ static int tiadc_read_raw(struct iio_dev *indio_dev,
 
 	fifo1count = tiadc_readl(adc_dev, REG_FIFO1CNT);
 	for (i = 0; i < fifo1count; i++) {
-		readx1 = tiadc_readl(adc_dev, REG_FIFO1);
-		if (i == chan->channel)
-			*val = readx1 & 0xfff;
+
+		read = tiadc_readl(adc_dev, REG_FIFO1);
+		stepid = read & FIFOREAD_CHNLID_MASK;
+		stepid = stepid >> 0x10;
+
+		if (stepid == map_val) {
+			read = read & FIFOREAD_DATA_MASK;
+			found = true;
+			*val = read;
+		}
 	}
-	tiadc_writel(adc_dev, REG_SE, STPENB_STEPENB);
+
+	if (found == false)
+		return -EBUSY;
 
 	return IIO_VAL_INT;
 }
