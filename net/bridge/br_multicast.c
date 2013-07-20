@@ -619,6 +619,9 @@ rehash:
 	setup_timer(&mp->timer, br_multicast_group_expired,
 		    (unsigned long)mp);
 
+	setup_timer(&mp->timer, br_multicast_group_expired,
+		    (unsigned long)mp);
+
 	hlist_add_head_rcu(&mp->hlist[mdb->ver], &mdb->mhash[hash]);
 	mdb->size++;
 
@@ -1129,6 +1132,10 @@ static int br_ip4_multicast_query(struct net_bridge *br,
 	if (!mp)
 		goto out;
 
+	mod_timer(&mp->timer, now + br->multicast_membership_interval);
+	mp->timer_armed = true;
+
+
 	max_delay *= br->multicast_last_member_count;
 
 	if (mp->mglist &&
@@ -1210,6 +1217,12 @@ static int br_ip6_multicast_query(struct net_bridge *br,
 	if (!mp)
 		goto out;
 
+<<<<<<< HEAD
+=======
+	mod_timer(&mp->timer, now + br->multicast_membership_interval);
+	mp->timer_armed = true;
+
+>>>>>>> 1faabf2aab1f... bridge: do not call setup_timer() multiple times
 	max_delay *= br->multicast_last_member_count;
 	if (mp->mglist &&
 	    (timer_pending(&mp->timer) ?
