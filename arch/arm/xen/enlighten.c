@@ -173,7 +173,7 @@ static void __init xen_percpu_init(void *unused)
 	put_cpu();
 }
 
-static void xen_restart(char str, const char *cmd)
+static void xen_restart(enum reboot_mode reboot_mode, const char *cmd)
 {
 	struct sched_shutdown r = { .reason = SHUTDOWN_reboot };
 	int rc;
