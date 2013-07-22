@@ -1807,13 +1807,14 @@ int brcmf_fws_process_skb(struct brcmf_if *ifp, struct sk_buff *skb)
 	ulong flags;
 	int fifo = BRCMF_FWS_FIFO_BCMC;
 	bool multicast = is_multicast_ether_addr(eh->h_dest);
+	bool pae = eh->h_proto == htons(ETH_P_PAE);
 
 	/* determine the priority */
 	if (!skb->priority)
 		skb->priority = cfg80211_classify8021d(skb);
 
 	drvr->tx_multicast += !!multicast;
-	if (ntohs(eh->h_proto) == ETH_P_PAE)
+	if (pae)
 		atomic_inc(&ifp->pend_8021x_cnt);
 
 	if (!brcmf_fws_fc_active(fws)) {
@@ -1846,9 +1847,15 @@ int brcmf_fws_process_skb(struct brcmf_if *ifp, struct sk_buff *skb)
 		drvr->fws->fifo_delay_map |= 1 << fifo;
 		brcmf_fws_enq(fws, BRCMF_FWS_SKBSTATE_DELAYED, fifo, skb);
 	} else {
-		if (brcmf_fws_commit_skb(fws, fifo, skb))
-			if (!multicast)
-				brcmf_skb_pick_up_credit(fws, fifo, skb);
+
+		brcmf_err("drop skb: no hanger slot\n");
+		if (pae) {
+			atomic_dec(&ifp->pend_8021x_cnt);
+			if (waitqueue_active(&ifp->pend_8021x_wait))
+				wake_up(&ifp->pend_8021x_wait);
+		}
+		brcmu_pkt_buf_free_skb(skb);
+
 	}
 	brcmf_fws_unlock(drvr, flags);
 	return 0;
