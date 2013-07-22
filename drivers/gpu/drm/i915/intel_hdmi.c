@@ -755,10 +755,22 @@ static void intel_disable_hdmi(struct intel_encoder *encoder)
 	}
 }
 
+static int hdmi_portclock_limit(struct intel_hdmi *hdmi)
+{
+	struct drm_device *dev = intel_hdmi_to_dev(hdmi);
+
+	if (IS_G4X(dev))
+		return 165000;
+	else if (IS_HASWELL(dev))
+		return 300000;
+	else
+		return 225000;
+}
+
 static int intel_hdmi_mode_valid(struct drm_connector *connector,
 				 struct drm_display_mode *mode)
 {
-	if (mode->clock > 165000)
+	if (mode->clock > hdmi_portclock_limit(intel_attached_hdmi(connector)))
 		return MODE_CLOCK_HIGH;
 	if (mode->clock < 20000)
 		return MODE_CLOCK_LOW;
@@ -775,6 +787,11 @@ bool intel_hdmi_compute_config(struct intel_encoder *encoder,
 	struct intel_hdmi *intel_hdmi = enc_to_intel_hdmi(&encoder->base);
 	struct drm_device *dev = encoder->base.dev;
 	struct drm_display_mode *adjusted_mode = &pipe_config->adjusted_mode;
+
+	int clock_12bpc = pipe_config->requested_mode.clock * 3 / 2;
+	int portclock_limit = hdmi_portclock_limit(intel_hdmi);
+	int desired_bpp;
+
 
 	if (intel_hdmi->color_range_auto) {
 		/* See CEA-861-E - 5.1 Default Encoding Parameters */
@@ -796,12 +813,28 @@ bool intel_hdmi_compute_config(struct intel_encoder *encoder,
 	 * through, clamp it down. Note that g4x/vlv don't support 12bpc hdmi
 	 * outputs.
 	 */
-	if (pipe_config->pipe_bpp > 8*3 && HAS_PCH_SPLIT(dev)) {
-		DRM_DEBUG_KMS("forcing bpc to 12 for HDMI\n");
-		pipe_config->pipe_bpp = 12*3;
+
+	if (pipe_config->pipe_bpp > 8*3 && clock_12bpc <= portclock_limit
+	    && HAS_PCH_SPLIT(dev)) {
+		DRM_DEBUG_KMS("picking bpc to 12 for HDMI output\n");
+		desired_bpp = 12*3;
+
+		/* Need to adjust the port link by 1.5x for 12bpc. */
+		pipe_config->port_clock = clock_12bpc;
 	} else {
-		DRM_DEBUG_KMS("forcing bpc to 8 for HDMI\n");
-		pipe_config->pipe_bpp = 8*3;
+		DRM_DEBUG_KMS("picking bpc to 8 for HDMI output\n");
+		desired_bpp = 8*3;
+	}
+
+	if (!pipe_config->bw_constrained) {
+		DRM_DEBUG_KMS("forcing pipe bpc to %i for HDMI\n", desired_bpp);
+		pipe_config->pipe_bpp = desired_bpp;
+	}
+
+	if (adjusted_mode->clock > portclock_limit) {
+		DRM_DEBUG_KMS("too high HDMI clock, rejecting mode\n");
+		return false;
+
 	}
 
 	return true;
