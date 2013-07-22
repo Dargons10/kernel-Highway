@@ -240,7 +240,11 @@ done:
 void brcmf_txflowblock_if(struct brcmf_if *ifp,
 			  enum brcmf_netif_stop_reason reason, bool state)
 {
-	if (!ifp)
+
+	unsigned long flags;
+
+	if (!ifp || !ifp->ndev)
+
 		return;
 
 	brcmf_dbg(TRACE, "enter: idx=%d stop=0x%X reason=%d state=%d\n",
