@@ -942,8 +942,12 @@ static ssize_t port_fops_splice_write(struct pipe_inode_info *pipe,
 	 * so this returns just 0 for no data.
 	 */
 
-	if (!pipe->nrbufs)
-		return 0;
+	pipe_lock(pipe);
+	if (!pipe->nrbufs) {
+		ret = 0;
+		goto error_out;
+	}
+
 
 
 	ret = wait_port_writable(port, filp->f_flags & O_NONBLOCK);
