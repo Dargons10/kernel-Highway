@@ -5675,7 +5675,10 @@ tracing_init_debugfs_percpu(struct trace_array *tr, long cpu)
 				tr, cpu, &snapshot_fops);
 
 	trace_create_cpu_file("snapshot_raw", 0444, d_cpu,
+
 				tr, cpu, &snapshot_raw_fops);
+
+
 #endif
 }
 
