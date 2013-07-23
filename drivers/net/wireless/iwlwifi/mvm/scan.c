@@ -179,12 +179,6 @@ static void iwl_mvm_scan_fill_channels(struct iwl_scan_cmd *cmd,
 		(cmd->data + le16_to_cpu(cmd->tx_cmd.len));
 	int i;
 
-	__le32 chan_type_value;
-
-	if (req->n_ssids > 0)
-		chan_type_value = cpu_to_le32(BIT(req->n_ssids) - 1);
-	else
-		chan_type_value = SCAN_CHANNEL_TYPE_PASSIVE;
 
 
 	for (i = 0; i < cmd->channel_count; i++) {
