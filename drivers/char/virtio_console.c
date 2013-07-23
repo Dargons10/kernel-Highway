@@ -941,11 +941,10 @@ static ssize_t port_fops_splice_write(struct pipe_inode_info *pipe,
 	 * pipe->nrbufs == 0 means there are no data to transfer,
 	 * so this returns just 0 for no data.
 	 */
-	pipe_lock(pipe);
-	if (!pipe->nrbufs) {
-		ret = 0;
-		goto error_out;
-	}
+
+	if (!pipe->nrbufs)
+		return 0;
+
 
 	ret = wait_port_writable(port, filp->f_flags & O_NONBLOCK);
 	if (ret < 0)

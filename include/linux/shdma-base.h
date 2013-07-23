@@ -122,13 +122,12 @@ void shdma_chan_remove(struct shdma_chan *schan);
 int shdma_init(struct device *dev, struct shdma_dev *sdev,
 		    int chan_num);
 void shdma_cleanup(struct shdma_dev *sdev);
-<<<<<<< HEAD
-=======
+
 #if IS_ENABLED(CONFIG_SH_DMAE_BASE)
 bool shdma_chan_filter(struct dma_chan *chan, void *arg);
 #else
 #define shdma_chan_filter NULL
 #endif
->>>>>>> ab116a4df494... dmaengine: shdma: fix a build failure on platforms with no DMA support
+
 
 #endif
