@@ -2736,8 +2736,10 @@ static struct dma_async_tx_descriptor *pl330_prep_dma_cyclic(
 			dev_err(pch->dmac->pif.dev, "%s:%d Unable to fetch desc\n",
 				__func__, __LINE__);
 
+
 			if (!first)
 				return NULL;
+
 
 			spin_lock_irqsave(&pdmac->pool_lock, flags);
 
@@ -2748,6 +2750,7 @@ static struct dma_async_tx_descriptor *pl330_prep_dma_cyclic(
 			}
 
 			list_move_tail(&first->node, &pdmac->desc_pool);
+
 
 			spin_unlock_irqrestore(&pdmac->pool_lock, flags);
 
