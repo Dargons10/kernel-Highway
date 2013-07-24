@@ -53,6 +53,8 @@ struct device_node;
 #define EEH_PE_ISOLATED		(1 << 0)	/* Isolated PE		*/
 #define EEH_PE_RECOVERING	(1 << 1)	/* Recovering PE	*/
 
+#define EEH_PE_KEEP		(1 << 8)	/* Keep PE on hotplug	*/
+
 struct eeh_pe {
 	int type;			/* PE type: PHB/Bus/Device	*/
 	int state;			/* PE EEH dependent mode	*/
@@ -185,7 +187,12 @@ static inline void eeh_unlock(void)
 typedef void *(*eeh_traverse_func)(void *data, void *flag);
 int eeh_phb_pe_create(struct pci_controller *phb);
 int eeh_add_to_parent_pe(struct eeh_dev *edev);
+<<<<<<< HEAD
 int eeh_rmv_from_parent_pe(struct eeh_dev *edev, int purge_pe);
+=======
+int eeh_rmv_from_parent_pe(struct eeh_dev *edev);
+void eeh_pe_update_time_stamp(struct eeh_pe *pe);
+>>>>>>> 807a827d4e74... powerpc/eeh: Keep PE during hotplug
 void *eeh_pe_dev_traverse(struct eeh_pe *root,
 		eeh_traverse_func fn, void *flag);
 void eeh_pe_restore_bars(struct eeh_pe *pe);
@@ -206,8 +213,7 @@ void eeh_add_device_tree_early(struct device_node *);
 void eeh_add_device_late(struct pci_dev *);
 void eeh_add_device_tree_late(struct pci_bus *);
 void eeh_add_sysfs_files(struct pci_bus *);
-void eeh_remove_device(struct pci_dev *, int);
-void eeh_remove_bus_device(struct pci_dev *, int);
+void eeh_remove_device(struct pci_dev *);
 
 /**
  * EEH_POSSIBLE_ERROR() -- test for possible MMIO failure.
@@ -252,9 +258,7 @@ static inline void eeh_add_device_tree_late(struct pci_bus *bus) { }
 
 static inline void eeh_add_sysfs_files(struct pci_bus *bus) { }
 
-static inline void eeh_remove_device(struct pci_dev *dev, int purge_pe) { }
-
-static inline void eeh_remove_bus_device(struct pci_dev *dev, int purge_pe) { }
+static inline void eeh_remove_device(struct pci_dev *dev) { }
 
 static inline void eeh_lock(void) { }
 static inline void eeh_unlock(void) { }
