@@ -97,20 +97,14 @@ config SATA_AHCI_PLATFORM
 
 	  If unsure, say N.
 
-config SATA_AHCI_TEGRA
-	tristate "TEGRA AHCI SATA support"
-	depends on ARCH_TEGRA_3x_SOC || ARCH_TEGRA_12x_SOC
-	help
-	  This option enables support for TEGRA AHCI Serial ATA.
 
-	  If unsure, say N.
-
-config TEGRA_SATA_IDLE_POWERGATE
-	bool "TEGRA SATA idle power-gating"
-	depends on SATA_AHCI_TEGRA && PM && PM_RUNTIME
+config AHCI_IMX
+	tristate "Freescale i.MX AHCI SATA support"
+	depends on SATA_AHCI_PLATFORM
 	help
-	  This option enables power-gating during SATA idling.
-	  This option should not be enabled if sata clocks are in dvfs_table.
+	  This option enables support for the Freescale i.MX SoC's
+	  onboard AHCI SATA.
+
 
 	  If unsure, say N.
 
