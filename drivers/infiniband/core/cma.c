@@ -828,7 +828,35 @@ static void cma_save_net_info(struct rdma_addr *addr,
 	struct sockaddr_in *listen4, *ip4;
 	struct sockaddr_in6 *listen6, *ip6;
 
-	switch (ip_ver) {
+	listen6 = (struct sockaddr_in6 *) &listen_id->route.addr.src_addr;
+	ip6 = (struct sockaddr_in6 *) &id->route.addr.src_addr;
+	ip6->sin6_family = listen6->sin6_family;
+	ip6->sin6_addr = hdr->dst_addr.ip6;
+	ip6->sin6_port = listen6->sin6_port;
+
+	ip6 = (struct sockaddr_in6 *) &id->route.addr.dst_addr;
+	ip6->sin6_family = listen6->sin6_family;
+	ip6->sin6_addr = hdr->src_addr.ip6;
+	ip6->sin6_port = hdr->port;
+}
+
+static int cma_save_net_info(struct rdma_cm_id *id, struct rdma_cm_id *listen_id,
+			     struct ib_cm_event *ib_event)
+{
+	struct cma_hdr *hdr;
+
+	if ((listen_id->route.addr.src_addr.ss_family == AF_IB) &&
+	    (ib_event->event == IB_CM_REQ_RECEIVED)) {
+		cma_save_ib_info(id, listen_id, ib_event->param.req_rcvd.primary_path);
+		return 0;
+	}
+
+	hdr = ib_event->private_data;
+	if (hdr->cma_version != CMA_VERSION)
+		return -EINVAL;
+
+	switch (cma_get_ip_ver(hdr)) {
+
 	case 4:
 		listen4 = (struct sockaddr_in *) &listen_addr->src_addr;
 		ip4 = (struct sockaddr_in *) &addr->src_addr;
@@ -2586,7 +2614,7 @@ static int cma_sidr_rep_handler(struct ib_cm_id *cm_id,
 		cma_exch(id_priv, RDMA_CM_DESTROYING);
 		mutex_unlock(&id_priv->handler_mutex);
 		rdma_destroy_id(&id_priv->id);
-		return ret;
+		return redrivers/infiniband/core/cma.ct;
 	}
 out:
 	mutex_unlock(&id_priv->handler_mutex);
