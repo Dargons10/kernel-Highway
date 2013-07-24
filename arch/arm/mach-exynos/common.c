@@ -68,8 +68,7 @@ static const char name_exynos5440[] = "EXYNOS5440";
 
 static void exynos4_map_io(void);
 static void exynos5_map_io(void);
-static void exynos5440_map_io(void);
-static void exynos4_init_uarts(struct s3c2410_uartcfg *cfg, int no);
+
 static int exynos_init(void);
 
 unsigned long xxti_f = 0, xusbxti_f = 0;
@@ -105,7 +104,6 @@ static struct cpu_table cpu_ids[] __initdata = {
 	}, {
 		.idcode		= EXYNOS5440_SOC_ID,
 		.idmask		= EXYNOS5_SOC_MASK,
-		.map_io		= exynos5440_map_io,
 		.init		= exynos_init,
 		.name		= name_exynos5440,
 	},
@@ -167,11 +165,6 @@ static struct map_desc exynos4_iodesc[] __initdata = {
 		.virtual	= (unsigned long)S5P_VA_GIC_DIST,
 		.pfn		= __phys_to_pfn(EXYNOS4_PA_GIC_DIST),
 		.length		= SZ_64K,
-		.type		= MT_DEVICE,
-	}, {
-		.virtual	= (unsigned long)S3C_VA_UART,
-		.pfn		= __phys_to_pfn(EXYNOS4_PA_UART),
-		.length		= SZ_512K,
 		.type		= MT_DEVICE,
 	}, {
 		.virtual	= (unsigned long)S5P_VA_CMU,
@@ -286,20 +279,6 @@ static struct map_desc exynos5_iodesc[] __initdata = {
 		.virtual	= (unsigned long)S5P_VA_PMU,
 		.pfn		= __phys_to_pfn(EXYNOS5_PA_PMU),
 		.length		= SZ_64K,
-		.type		= MT_DEVICE,
-	}, {
-		.virtual	= (unsigned long)S3C_VA_UART,
-		.pfn		= __phys_to_pfn(EXYNOS5_PA_UART),
-		.length		= SZ_512K,
-		.type		= MT_DEVICE,
-	},
-};
-
-static struct map_desc exynos5440_iodesc0[] __initdata = {
-	{
-		.virtual	= (unsigned long)S3C_VA_UART,
-		.pfn		= __phys_to_pfn(EXYNOS5440_PA_UART0),
-		.length		= SZ_512K,
 		.type		= MT_DEVICE,
 	},
 };
@@ -455,16 +434,6 @@ static void __init exynos5_map_io(void)
 		iotable_init(exynos5250_iodesc, ARRAY_SIZE(exynos5250_iodesc));
 }
 
-static void __init exynos5440_map_io(void)
-{
-	iotable_init(exynos5440_iodesc0, ARRAY_SIZE(exynos5440_iodesc0));
-}
-
-void __init exynos_set_timer_source(u8 channels)
-{
-	exynos4_pwm_variant.output_mask = BIT(SAMSUNG_PWM_NUM) - 1;
-	exynos4_pwm_variant.output_mask &= ~channels;
-}
 
 void __init exynos_init_time(void)
 {
