@@ -16,6 +16,7 @@
 #include <linux/errno.h>
 #include <linux/compat.h>
 #include <asm/asm-offsets.h>
+#include <asm/facility.h>
 #include <asm/current.h>
 #include <asm/debug.h>
 #include <asm/ebcdic.h>
@@ -465,6 +466,84 @@ static int handle_epsw(struct kvm_vcpu *vcpu)
 		vcpu->run->s.regs.gprs[reg2] |=
 			vcpu->arch.sie_block->gpsw.mask & 0x00000000ffffffff;
 	}
+	return 0;
+}
+
+
+#define PFMF_RESERVED   0xfffc0101UL
+#define PFMF_SK         0x00020000UL
+#define PFMF_CF         0x00010000UL
+#define PFMF_UI         0x00008000UL
+#define PFMF_FSC        0x00007000UL
+#define PFMF_NQ         0x00000800UL
+#define PFMF_MR         0x00000400UL
+#define PFMF_MC         0x00000200UL
+#define PFMF_KEY        0x000000feUL
+
+static int handle_pfmf(struct kvm_vcpu *vcpu)
+{
+	int reg1, reg2;
+	unsigned long start, end;
+
+	vcpu->stat.instruction_pfmf++;
+
+	kvm_s390_get_regs_rre(vcpu, &reg1, &reg2);
+
+	if (!MACHINE_HAS_PFMF)
+		return kvm_s390_inject_program_int(vcpu, PGM_OPERATION);
+
+	if (vcpu->arch.sie_block->gpsw.mask & PSW_MASK_PSTATE)
+		return kvm_s390_inject_program_int(vcpu, PGM_PRIVILEGED_OP);
+
+	if (vcpu->run->s.regs.gprs[reg1] & PFMF_RESERVED)
+		return kvm_s390_inject_program_int(vcpu, PGM_SPECIFICATION);
+
+	/* Only provide non-quiescing support if the host supports it */
+	if (vcpu->run->s.regs.gprs[reg1] & PFMF_NQ && !test_facility(14))
+		return kvm_s390_inject_program_int(vcpu, PGM_SPECIFICATION);
+
+	/* No support for conditional-SSKE */
+	if (vcpu->run->s.regs.gprs[reg1] & (PFMF_MR | PFMF_MC))
+		return kvm_s390_inject_program_int(vcpu, PGM_SPECIFICATION);
+
+	start = vcpu->run->s.regs.gprs[reg2] & PAGE_MASK;
+	switch (vcpu->run->s.regs.gprs[reg1] & PFMF_FSC) {
+	case 0x00000000:
+		end = (start + (1UL << 12)) & ~((1UL << 12) - 1);
+		break;
+	case 0x00001000:
+		end = (start + (1UL << 20)) & ~((1UL << 20) - 1);
+		break;
+	/* We dont support EDAT2
+	case 0x00002000:
+		end = (start + (1UL << 31)) & ~((1UL << 31) - 1);
+		break;*/
+	default:
+		return kvm_s390_inject_program_int(vcpu, PGM_SPECIFICATION);
+	}
+	while (start < end) {
+		unsigned long useraddr;
+
+		useraddr = gmap_translate(start, vcpu->arch.gmap);
+		if (IS_ERR((void *)useraddr))
+			return kvm_s390_inject_program_int(vcpu, PGM_ADDRESSING);
+
+		if (vcpu->run->s.regs.gprs[reg1] & PFMF_CF) {
+			if (clear_user((void __user *)useraddr, PAGE_SIZE))
+				return kvm_s390_inject_program_int(vcpu, PGM_ADDRESSING);
+		}
+
+		if (vcpu->run->s.regs.gprs[reg1] & PFMF_SK) {
+			if (set_guest_storage_key(current->mm, useraddr,
+					vcpu->run->s.regs.gprs[reg1] & PFMF_KEY,
+					vcpu->run->s.regs.gprs[reg1] & PFMF_NQ))
+				return kvm_s390_inject_program_int(vcpu, PGM_ADDRESSING);
+		}
+
+		start += PAGE_SIZE;
+	}
+	if (vcpu->run->s.regs.gprs[reg1] & PFMF_FSC)
+		vcpu->run->s.regs.gprs[reg2] = end;
 	return 0;
 }
 
