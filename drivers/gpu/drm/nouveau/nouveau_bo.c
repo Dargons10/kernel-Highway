@@ -198,6 +198,19 @@ nouveau_bo_new(struct drm_device *dev, int size, int align,
 	int ret;
 	int type = ttm_bo_type_device;
 
+	int lpg_shift = 12;
+	int max_size;
+
+	if (drm->client.base.vm)
+		lpg_shift = drm->client.base.vm->vmm->lpg_shift;
+	max_size = INT_MAX & ~((1 << lpg_shift) - 1);
+
+	if (size <= 0 || size > max_size) {
+		nv_warn(drm, "skipped size %x\n", (u32)size);
+		return -EINVAL;
+	}
+
+
 	if (sg)
 		type = ttm_bo_type_sg;
 
