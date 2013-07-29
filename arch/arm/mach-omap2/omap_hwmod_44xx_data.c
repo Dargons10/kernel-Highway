@@ -3492,10 +3492,9 @@ static struct omap_hwmod omap44xx_uart3_hwmod = {
 	.name		= "uart3",
 	.class		= &omap44xx_uart_hwmod_class,
 	.clkdm_name	= "l4_per_clkdm",
-	.flags		= HWMOD_INIT_NO_IDLE | HWMOD_INIT_NO_RESET |
-				HWMOD_SWSUP_SIDLE_ACT,
-	.mpu_irqs	= omap44xx_uart3_irqs,
-	.sdma_reqs	= omap44xx_uart3_sdma_reqs,
+
+	.flags		= DEBUG_OMAP4UART3_FLAGS | HWMOD_SWSUP_SIDLE_ACT,
+
 	.main_clk	= "func_48m_fclk",
 	.prcm = {
 		.omap4 = {
@@ -3522,9 +3521,9 @@ static struct omap_hwmod omap44xx_uart4_hwmod = {
 	.name		= "uart4",
 	.class		= &omap44xx_uart_hwmod_class,
 	.clkdm_name	= "l4_per_clkdm",
-	.flags		= HWMOD_SWSUP_SIDLE_ACT,
-	.mpu_irqs	= omap44xx_uart4_irqs,
-	.sdma_reqs	= omap44xx_uart4_sdma_reqs,
+
+	.flags		= DEBUG_OMAP4UART4_FLAGS | HWMOD_SWSUP_SIDLE_ACT,
+
 	.main_clk	= "func_48m_fclk",
 	.prcm = {
 		.omap4 = {
