@@ -1697,7 +1697,7 @@ static int atl1c_alloc_rx_buffer(struct atl1c_adapter *adapter)
 	while (next_info->flags & ATL1C_BUFFER_FREE) {
 		rfd_desc = ATL1C_RFD_DESC(rfd_ring, rfd_next_to_use);
 
-		skb = netdev_alloc_skb(adapter->netdev, adapter->rx_buffer_len);
+		skb = atl1c_alloc_skb(adapter);
 
 		if (unlikely(!skb)) {
 			if (netif_msg_rx_err(adapter))
