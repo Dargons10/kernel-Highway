@@ -868,12 +868,15 @@
 /*
  * NOVITUS printers
  */
+<<<<<<< HEAD
 #define NOVITUS_VID			0x1a28
 #define NOVITUS_BONO_E_PID		0x6010
 
 /*
  * RT Systems programming cables for various ham radios
  */
+=======
+>>>>>>> fed1f1ed90bc... USB: serial: ftdi_sio: add more RT Systems ftdi devices
 #define RTSYSTEMS_VID		0x2100	/* Vendor ID */
 #define RTSYSTEMS_USB_S03_PID	0x9001	/* RTS-03 USB to Serial Adapter */
 #define RTSYSTEMS_USB_59_PID	0x9e50	/* USB-59 USB to 8 pin plug */
