@@ -2739,12 +2739,6 @@ static int mvneta_probe(struct platform_device *pdev)
 	pp->phy_node = phy_node;
 	pp->phy_interface = phy_mode;
 
-	pp->base = of_iomap(dn, 0);
-	if (pp->base == NULL) {
-		err = -ENOMEM;
-		goto err_free_irq;
-	}
-
 	pp->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(pp->clk)) {
 		err = PTR_ERR(pp->clk);
@@ -2759,6 +2753,19 @@ static int mvneta_probe(struct platform_device *pdev)
 		err = -ENOMEM;
 		goto err_clk;
 	}
+
+
+	pp->base = of_iomap(dn, 0);
+	if (pp->base == NULL) {
+		err = -ENOMEM;
+		goto err_free_irq;
+	}
+
+	pp->tx_done_timer.data = (unsigned long)dev;
+	pp->tx_done_timer.function = mvneta_tx_done_timer_callback;
+	init_timer(&pp->tx_done_timer);
+	clear_bit(MVNETA_F_TX_DONE_TIMER_BIT, &pp->flags);
+
 
 	pp->tx_ring_size = MVNETA_MAX_TXD;
 	pp->rx_ring_size = MVNETA_MAX_RXD;
