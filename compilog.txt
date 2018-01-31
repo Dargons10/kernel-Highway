@@ -9,17 +9,6 @@
 ---------------------------------------------------
 4 - return                                         -
 ---------------------------------------------------
-Ваш выбор: [3J[H[2J---------------------------------------------------
-Выполнить чистую сборку?                          -
----------------------------------------------------
-1 -clean_build=1;compile;;                                           -
----------------------------------------------------
-2 - compile;;                                       -
----------------------------------------------------
-3 - compile dtb                                   -
----------------------------------------------------
-4 - return                                         -
----------------------------------------------------
 Ваш выбор: [3J[H[2J#
 # configuration written to .config
 #
@@ -62,27 +51,15 @@ make[1]: 'include/generated/mach-types.h' está actualizado.
 =======
 >>>>>>> db707e2354f... mocha: Update build files
   CC      init/version.o
-  CC      arch/arm/kernel/bootinfo.o
-  LD      init/built-in.o
   CC      kernel/sys.o
-  CC      arch/arm/mach-tegra/devices.o
-  LD      arch/arm/kernel/built-in.o
-  CC      arch/arm/mach-tegra/board-ardbeg.o
-  CC      drivers/ata/libata-core.o
-  CC      drivers/ata/libata-scsi.o
+  LD      init/built-in.o
+  CC      drivers/base/firmware_class.o
   CC      fs/aio.o
   CC      kernel/trace/trace.o
-  CC      arch/arm/mach-tegra/board-ardbeg-sata.o
-  CC      arch/arm/mach-tegra/board-ardbeg-power.o
-  CC      drivers/ata/libata-eh.o
+  LD      drivers/base/built-in.o
   LD      fs/built-in.o
-  CC      arch/arm/mach-tegra/panel-a-1200-1920-7-0.o
-  CC      arch/arm/mach-tegra/panel-a-1200-800-8-0.o
-  CC      sound/pci/hda/hda_intel.o
-  CC      drivers/base/firmware_class.o
-  CC      arch/arm/mach-tegra/board-loki.o
-  LD      kernel/trace/built-in.o
   CC      kernel/module.o
+<<<<<<< HEAD
   CC      arch/arm/mach-tegra/board-loki-kbc.o
   CC      drivers/ata/libata-transport.o
   LD      drivers/base/built-in.o
@@ -195,11 +172,15 @@ make[1]: 'include/generated/mach-types.h' está actualizado.
   LD      sound/pci/hda/snd-hda-intel.o
   LD      sound/pci/hda/built-in.o
 >>>>>>> db707e2354f... mocha: Update build files
+=======
+>>>>>>> 8b337c8f614... mocha:configs: mocha: disable all other chargers and batteries
   GZIP    kernel/config_data.gz
+  LD      kernel/trace/built-in.o
+  LD      drivers/power/built-in.o
   CHK     kernel/config_data.h
-  CC      drivers/clk/clk-palmas.o
   UPD     kernel/config_data.h
   CC      kernel/configs.o
+<<<<<<< HEAD
 <<<<<<< HEAD
   CC      fs/nfs/super.o
   CC      fs/lockd/svcproc.o
@@ -207,43 +188,9 @@ make[1]: 'include/generated/mach-types.h' está actualizado.
 =======
   LD      sound/pci/built-in.o
 >>>>>>> db707e2354f... mocha: Update build files
+=======
+>>>>>>> 8b337c8f614... mocha:configs: mocha: disable all other chargers and batteries
   LD      kernel/built-in.o
-  CC      sound/soc/codecs/tfa98xx.o
-  LD      drivers/clk/built-in.o
-  CC      drivers/extcon/extcon-palmas.o
-  CC      drivers/ata/libahci.o
-  CC      drivers/gpio/gpio-palmas.o
-  LD      sound/soc/codecs/snd-soc-spdif-rx.o
-  LD      sound/soc/codecs/snd-soc-spdif-tx.o
-  LD      sound/soc/codecs/snd-soc-tfa98xx.o
-  LD      sound/soc/codecs/snd-soc-rt5671.o
-  LD      sound/soc/codecs/built-in.o
-  LD      drivers/extcon/built-in.o
-  LD      sound/soc/built-in.o
-  LD      drivers/gpio/built-in.o
-  LD      sound/built-in.o
-  CC      drivers/mfd/palmas.o
-  LD      drivers/ata/libata.o
-  LD      drivers/ata/built-in.o
-  CC      drivers/pinctrl/pinctrl-palmas.o
-  CC      drivers/pci/quirks.o
-  CC      drivers/power/bq27x00_battery.o
-  LD      drivers/mfd/built-in.o
-  LD      drivers/pinctrl/built-in.o
-  CC      drivers/regulator/palmas-regulator.o
-  CC      drivers/rtc/rtc-palmas.o
-  LD      drivers/pci/built-in.o
-  LD      drivers/rtc/built-in.o
-  CC      drivers/power/reset/palmas-poweroff.o
-  CC      drivers/staging/iio/adc/palmas_gpadc.o
-  CC      drivers/thermal/palmas_thermal.o
-  LD      drivers/regulator/built-in.o
-  LD      drivers/thermal/built-in.o
-  LD      drivers/power/reset/built-in.o
-  LD      drivers/power/built-in.o
-  LD      drivers/staging/iio/adc/built-in.o
-  LD      drivers/staging/iio/built-in.o
-  LD      drivers/staging/built-in.o
   LD      drivers/built-in.o
   LINK    vmlinux
   LD      vmlinux.o
@@ -278,6 +225,7 @@ make[1]: 'include/generated/mach-types.h' está actualizado.
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 Ядро скомпилировано за 00:08
 [0m[1;32mСборка номер 70 в ветке 
 =======
@@ -292,6 +240,10 @@ make[1]: 'include/generated/mach-types.h' está actualizado.
 Ядро скомпилировано за 00:36
 [0m[1;32mСборка номер 86 в ветке 
 >>>>>>> db707e2354f... mocha: Update build files
+=======
+Ядро скомпилировано за 00:29
+[0m[1;32mСборка номер 87 в ветке 
+>>>>>>> 8b337c8f614... mocha:configs: mocha: disable all other chargers and batteries
 [0m[1;32m
 Создание zip архива
 
@@ -320,6 +272,7 @@ make[1]: 'include/generated/mach-types.h' está actualizado.
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 v3.10.96(24.10.2019-23.42).zip создан, перемещение в /home/dargons10/mkernel/output[0m
 =======
 v3.10.96(25.10.2019-23.21).zip создан, перемещение в /home/dargons10/mkernel/output[0m
@@ -330,6 +283,9 @@ v3.10.96(26.10.2019-10.08).zip создан, перемещение в /home/dar
 =======
 v3.10.96(27.10.2019-09.22).zip создан, перемещение в /home/dargons10/mkernel/output[0m
 >>>>>>> db707e2354f... mocha: Update build files
+=======
+v3.10.96(27.10.2019-09.27).zip создан, перемещение в /home/dargons10/mkernel/output[0m
+>>>>>>> 8b337c8f614... mocha:configs: mocha: disable all other chargers and batteries
 [1;32m
 Завершено
 [0m
