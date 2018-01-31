@@ -51,14 +51,37 @@ make[1]: 'include/generated/mach-types.h' está actualizado.
 =======
 >>>>>>> db707e2354f... mocha: Update build files
   CC      init/version.o
-  CC      kernel/sys.o
+  CC      arch/arm/kernel/bootinfo.o
   LD      init/built-in.o
+  CC      kernel/sys.o
+  CC      arch/arm/mach-tegra/board-ardbeg.o
+  LD      arch/arm/kernel/built-in.o
+  CC      arch/arm/mach-tegra/board-ardbeg-power.o
   CC      drivers/base/firmware_class.o
+<<<<<<< HEAD
   CC      fs/aio.o
   CC      kernel/trace/trace.o
   LD      drivers/base/built-in.o
   LD      fs/built-in.o
+=======
+  CC      kernel/trace/trace.o
+  CC      arch/arm/mach-tegra/panel-a-1200-1920-7-0.o
+  CC      arch/arm/mach-tegra/panel-a-1200-800-8-0.o
+  LD      drivers/base/built-in.o
+  CC      drivers/clk/clk-palmas.o
+  CC      arch/arm/mach-tegra/board-loki.o
+  LD      drivers/clk/built-in.o
+  CC      arch/arm/mach-tegra/board-loki-kbc.o
+  CC      drivers/extcon/extcon-palmas.o
+  CC      arch/arm/mach-tegra/board-loki-power.o
+  CC      drivers/gpio/gpio-palmas.o
+  LD      drivers/extcon/built-in.o
+  LD      arch/arm/mach-tegra/built-in.o
+  LD      drivers/gpio/built-in.o
+  LD      kernel/trace/built-in.o
+>>>>>>> d4119b232a9... mocha: Revert drivers: extcon: add wakelock
   CC      kernel/module.o
+<<<<<<< HEAD
 <<<<<<< HEAD
   CC      arch/arm/mach-tegra/board-loki-kbc.o
   CC      drivers/ata/libata-transport.o
@@ -174,10 +197,25 @@ make[1]: 'include/generated/mach-types.h' está actualizado.
 >>>>>>> db707e2354f... mocha: Update build files
 =======
 >>>>>>> 8b337c8f614... mocha:configs: mocha: disable all other chargers and batteries
+=======
+  CC      drivers/mfd/palmas.o
+>>>>>>> ef70cd0d425... mocha:mocha: Revert drivers: extcon: add wakelock
   GZIP    kernel/config_data.gz
+<<<<<<< HEAD
   LD      kernel/trace/built-in.o
   LD      drivers/power/built-in.o
+=======
+  LD      drivers/mfd/built-in.o
+  CC      drivers/pinctrl/pinctrl-palmas.o
+  CC      drivers/power/bq27x00_battery.o
+  CC      drivers/power/reset/palmas-poweroff.o
+  LD      drivers/pinctrl/built-in.o
+  LD      drivers/power/reset/built-in.o
+  CC      drivers/rtc/rtc-palmas.o
+  CC      drivers/regulator/palmas-regulator.o
+>>>>>>> d4119b232a9... mocha: Revert drivers: extcon: add wakelock
   CHK     kernel/config_data.h
+<<<<<<< HEAD
   UPD     kernel/config_data.h
   CC      kernel/configs.o
 <<<<<<< HEAD
@@ -190,7 +228,21 @@ make[1]: 'include/generated/mach-types.h' está actualizado.
 >>>>>>> db707e2354f... mocha: Update build files
 =======
 >>>>>>> 8b337c8f614... mocha:configs: mocha: disable all other chargers and batteries
+=======
+>>>>>>> ef70cd0d425... mocha:mocha: Revert drivers: extcon: add wakelock
   LD      kernel/built-in.o
+<<<<<<< HEAD
+=======
+  LD      drivers/rtc/built-in.o
+  CC      drivers/staging/iio/adc/palmas_gpadc.o
+  CC      drivers/thermal/palmas_thermal.o
+  LD      drivers/power/built-in.o
+  LD      drivers/regulator/built-in.o
+  LD      drivers/thermal/built-in.o
+  LD      drivers/staging/iio/adc/built-in.o
+  LD      drivers/staging/iio/built-in.o
+  LD      drivers/staging/built-in.o
+>>>>>>> d4119b232a9... mocha: Revert drivers: extcon: add wakelock
   LD      drivers/built-in.o
   LINK    vmlinux
   LD      vmlinux.o
@@ -226,6 +278,7 @@ make[1]: 'include/generated/mach-types.h' está actualizado.
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 Ядро скомпилировано за 00:08
 [0m[1;32mСборка номер 70 в ветке 
 =======
@@ -241,7 +294,12 @@ make[1]: 'include/generated/mach-types.h' está actualizado.
 [0m[1;32mСборка номер 86 в ветке 
 >>>>>>> db707e2354f... mocha: Update build files
 =======
+=======
+>>>>>>> ef70cd0d425... mocha:mocha: Revert drivers: extcon: add wakelock
 Ядро скомпилировано за 00:29
+=======
+Ядро скомпилировано за 00:32
+>>>>>>> d4119b232a9... mocha: Revert drivers: extcon: add wakelock
 [0m[1;32mСборка номер 87 в ветке 
 >>>>>>> 8b337c8f614... mocha:configs: mocha: disable all other chargers and batteries
 [0m[1;32m
@@ -273,6 +331,7 @@ make[1]: 'include/generated/mach-types.h' está actualizado.
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 v3.10.96(24.10.2019-23.42).zip создан, перемещение в /home/dargons10/mkernel/output[0m
 =======
 v3.10.96(25.10.2019-23.21).zip создан, перемещение в /home/dargons10/mkernel/output[0m
@@ -286,6 +345,12 @@ v3.10.96(27.10.2019-09.22).zip создан, перемещение в /home/dar
 =======
 v3.10.96(27.10.2019-09.27).zip создан, перемещение в /home/dargons10/mkernel/output[0m
 >>>>>>> 8b337c8f614... mocha:configs: mocha: disable all other chargers and batteries
+=======
+v3.10.96(27.10.2019-09.27).zip создан, перемещение в /home/dargons10/mkernel/output[0m
+=======
+v3.10.96(26.10.2019-23.51).zip создан, перемещение в /home/dargons10/mkernel/output[0m
+>>>>>>> d4119b232a9... mocha: Revert drivers: extcon: add wakelock
+>>>>>>> ef70cd0d425... mocha:mocha: Revert drivers: extcon: add wakelock
 [1;32m
 Завершено
 [0m
