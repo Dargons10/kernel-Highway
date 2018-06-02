@@ -655,7 +655,6 @@ static int imx179_get_otp_data(struct imx179_info *info)
 	int ret = 0;
 	int i, j;
 	u8 bak = 0;
-	u8 baj = 0;
 	u8 *otp = info->otp_data.otp_data;
 	info->otp_data.otp_size = 0;
 
@@ -701,6 +700,7 @@ static int imx179_get_otp_data(struct imx179_info *info)
 			otp++;
 		}
 	}
+
 
 	imx179_write_reg(info, 0x3380, 0x08);
 	imx179_write_reg(info, 0x3400, 0x01);
