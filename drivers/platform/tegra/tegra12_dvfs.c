@@ -84,8 +84,19 @@ static struct tegra_cooling_device core_vmin_cdev = {
 	.cdev_type = "core_cold",
 };
 
-static struct tegra_cooling_device gpu_vmin_cdev = {
-	.cdev_type = "gpu_cold",
+static int vdd_core_vmax_trips_table[MAX_THERMAL_LIMITS];
+static int vdd_core_therm_caps_table[MAX_THERMAL_LIMITS];
+static struct tegra_cooling_device core_vmax_cdev = {
+	.compatible = "nvidia,tegra124-rail-vmax-cdev",
+};
+
+static struct clk *vgpu_cap_clk;
+static unsigned long gpu_cap_rates[MAX_THERMAL_LIMITS];
+static int vdd_gpu_vmax_trips_table[MAX_THERMAL_LIMITS];
+static int vdd_gpu_therm_caps_table[MAX_THERMAL_LIMITS];
+static struct tegra_cooling_device gpu_vmax_cdev = {
+	.compatible = "nvidia,tegra124-rail-vmax-cdev",
+
 };
 
 static struct tegra_cooling_device gpu_vts_cdev = {
@@ -1377,6 +1388,54 @@ static void __init init_cpu_dvfs_table(int *cpu_max_freq_index)
 	BUG_ON((i == ARRAY_SIZE(cpu_cvb_dvfs_table)) || ret);
 }
 
+
+/*
+ * Common for both CPU clusters: initialize thermal profiles, and register
+ * Vmax cooling device.
+ */
+static int __init init_cpu_rail_thermal_profile(struct dvfs *cpu_dvfs)
+{
+	struct dvfs_rail *rail = &tegra12_dvfs_rail_vdd_cpu;
+
+ 	/*
+	 * Failure to get/configure trips may not be fatal for boot - let it
+	 * boot, even with partial configuration with appropriate WARNING, and
+	 * invalidate cdev. It must not happen with production DT, of course.
+	 */
+	if (rail->vmin_cdev) {
+		if (tegra_dvfs_rail_of_init_vmin_thermal_profile(
+			vdd_cpu_vmin_trips_table, vdd_cpu_therm_floors_table,
+			rail, &cpu_dvfs->dfll_data))
+			rail->vmin_cdev = NULL;
+	}
+
+ 	return 0;
+}
+
+/*
+ * CPU Vmax cooling device registration for pll mode:
+ * - Use CPU capping method provided by CPUFREQ platform driver
+ * - Skip registration if most aggressive cap is at/above maximum voltage
+ */
+static int __init tegra12_dvfs_register_cpu_vmax_cdev(void)
+{
+	struct dvfs_rail *rail;
+	
+ 	rail = &tegra12_dvfs_rail_vdd_cpu;
+	rail->apply_vmax_cap = tegra_cpu_volt_cap_apply;
+	if (rail->vmax_cdev) {
+		int i = rail->vmax_cdev->trip_temperatures_num;
+		if (i && rail->therm_mv_caps[i-1] < rail->nominal_millivolts)
+			tegra_dvfs_rail_register_vmax_cdev(rail);
+	}
+	
+	return 0;
+}
+late_initcall(tegra12_dvfs_register_cpu_vmax_cdev);
+
+ /* Setup GPU */
+
+
  /*
  * Setup gpu dvfs tables from cvb data, determine nominal voltage for gpu rail,
  * and gpu maximum frequency. Error when gpu dvfs table can not be constructed
@@ -1603,6 +1662,61 @@ static void __init init_gpu_dvfs_table(int *gpu_max_freq_index)
 	BUG_ON((i == ARRAY_SIZE(gpu_cvb_dvfs_table)) || ret);
 }
 
+/*
+ * GPU Vmax cooling device registration:
+ * - Use tegra12 GPU capping method that applies pre-populated cap rates
+ *   adjusted for each voltage cap trip-point (in case when GPU thermal
+ *   scaling initialization failed, fall back on using WC rate limit across all
+ *   thermal ranges).
+ * - Skip registration if most aggressive cap is at/above maximum voltage
+ */
+static int tegra12_gpu_volt_cap_apply(int *cap_idx, int new_idx, int level)
+{
+	int ret = -EINVAL;
+	unsigned long flags;
+	unsigned long cap_rate;
+
+ 	if (!cap_idx)
+		return 0;
+
+ 	clk_lock_save(vgpu_cap_clk, &flags);
+	*cap_idx = new_idx;
+
+ 	if (level) {
+		if (gpu_dvfs.dvfs_rail->vts_cdev && gpu_dvfs.therm_dvfs)
+			cap_rate = gpu_cap_rates[new_idx - 1];
+		else
+			cap_rate = tegra_dvfs_predict_hz_at_mv_max_tfloor(
+				clk_get_parent(vgpu_cap_clk), level);
+	} else {
+		cap_rate = clk_get_max_rate(vgpu_cap_clk);
+	}
+
+ 	if (!IS_ERR_VALUE(cap_rate))
+		ret = clk_set_rate_locked(vgpu_cap_clk, cap_rate);
+
+ 	clk_unlock_restore(vgpu_cap_clk, &flags);
+
+	return ret;
+}
+ static int __init tegra12_dvfs_register_gpu_vmax_cdev(void)
+{
+	struct dvfs_rail *rail;
+
+ 	rail = &tegra12_dvfs_rail_vdd_gpu;
+	rail->apply_vmax_cap = tegra12_gpu_volt_cap_apply;
+
+	if (rail->vmax_cdev) {
+		int i = rail->vmax_cdev->trip_temperatures_num;
+		if (i && rail->therm_mv_caps[i-1] < rail->nominal_millivolts)
+			tegra_dvfs_rail_register_vmax_cdev(rail);
+	}
+
+	return 0;
+}
+late_initcall(tegra12_dvfs_register_gpu_vmax_cdev);
+
+
  /*
  * Clip sku-based core nominal voltage to core DVFS voltage ladder
  */
@@ -1646,6 +1760,34 @@ static int __init get_core_nominal_mv_index(int speedo_id)
 			tegra_init_dvfs_one(d, core_nominal_mv_index);	       \
 		}							       \
 	} while (0)
+
+
+static int __init init_core_rail_thermal_profile(void)
+{
+	struct dvfs_rail *rail = &tegra12_dvfs_rail_vdd_core;
+
+ 	/*
+	 * Failure to get/configure trips may not be fatal for boot - let it
+	 * boot, even with partial configuration with appropriate WARNING, and
+	 * invalidate cdev. It must not happen with production DT, of course.
+	 */
+	if (rail->vmin_cdev) {
+		if (tegra_dvfs_rail_of_init_vmin_thermal_profile(
+			vdd_core_vmin_trips_table, vdd_core_therm_floors_table,
+			rail, NULL))
+			rail->vmin_cdev = NULL;
+	}
+
+	if (rail->vmax_cdev) {
+		if (tegra_dvfs_rail_of_init_vmax_thermal_profile(
+			vdd_core_vmax_trips_table, vdd_core_therm_caps_table,
+			rail, NULL))
+			rail->vmax_cdev = NULL;
+	}
+
+ 	return 0;
+}
+
 
 static int __init of_rails_init(struct device_node *dn)
 {
@@ -1911,6 +2053,35 @@ static struct core_bus_rates_table tegra12_emc_rates_sysfs = {
 	.available_rates_attr = {
 		.attr = {.name = "emc_available_rates", .mode = 0444} },
 };
+
+
+/*
+ * Core Vmax cooling device registration:
+ * - Use VDD_CORE capping method provided by DVFS
+ * - Skip registration if most aggressive cap is at/above maximum voltage
+ */
+static void __init tegra12_dvfs_register_core_vmax_cdev(void)
+{
+	struct dvfs_rail *rail;
+
+ 	rail = &tegra12_dvfs_rail_vdd_core;
+	rail->apply_vmax_cap = tegra_dvfs_therm_vmax_core_cap_apply;
+
+	if (rail->vmax_cdev) {
+		int i = rail->vmax_cdev->trip_temperatures_num;
+		if (i && rail->therm_mv_caps[i-1] < rail->nominal_millivolts)
+			tegra_dvfs_rail_register_vmax_cdev(rail);
+	}
+}
+
+ /*
+ * Initialize core capping interfaces. It can happen only after DVFS is ready.
+ * Therefore this late initcall must be invoked after clock late initcall where
+ * DVFS is initialized -- assured by the order in Make file. In addition core
+ * Vmax cooling device operation depends on core cap interface. Hence, register
+ * core Vmax cooling device here as well.
+ */
+
 
 static int __init tegra12_dvfs_init_core_cap(void)
 {
