@@ -4341,8 +4341,7 @@ CONFIG_L2TP_IP=m
 CONFIG_PGTABLE_MAPPING=y
 
 # zcache
-# break reboot to recovery/fastboot
-#CONFIG_ZCACHE=y
+CONFIG_ZCACHE=y
 
 
 
