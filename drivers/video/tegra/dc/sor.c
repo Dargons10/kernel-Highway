@@ -1,7 +1,7 @@
 /*
  * drivers/video/tegra/dc/sor.c
  *
- * Copyright (c) 2011-2013, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2011-2017, NVIDIA CORPORATION.  All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -131,6 +131,7 @@ static int dbg_sor_show(struct seq_file *s, void *unused)
 	DUMP_REG(NV_SOR_DC(0));
 	DUMP_REG(NV_SOR_DC(1));
 	DUMP_REG(NV_SOR_LANE_DRIVE_CURRENT(0));
+	DUMP_REG(NV_SOR_LANE4_DRIVE_CURRENT(0));
 	DUMP_REG(NV_SOR_PR(0));
 	DUMP_REG(NV_SOR_LANE4_PREEMPHASIS(0));
 	DUMP_REG(NV_SOR_POSTCURSOR(0));
@@ -463,7 +464,7 @@ static void tegra_dc_sor_config_pwm(struct tegra_dc_sor_data *sor, u32 pwm_div,
 	}
 }
 
-static void tegra_dc_sor_set_dp_mode(struct tegra_dc_sor_data *sor,
+void tegra_dc_sor_set_dp_mode(struct tegra_dc_sor_data *sor,
 	const struct tegra_dc_dp_link_config *cfg)
 {
 	u32 reg_val;
@@ -885,7 +886,6 @@ void tegra_dc_sor_enable_dp(struct tegra_dc_sor_data *sor)
 	/* Power up lanes */
 	BUG_ON(!cfg);
 	tegra_dc_sor_power_dplanes(sor, cfg->lane_count, true);
-	tegra_dc_sor_set_dp_mode(sor, cfg);
 }
 
 
@@ -983,6 +983,9 @@ void tegra_dc_sor_enable_lvds(struct tegra_dc_sor_data *sor,
 	tegra_sor_writel(sor, NV_SOR_LVDS, reg_val);
 	tegra_sor_writel(sor, NV_SOR_LANE_DRIVE_CURRENT(sor->portnum),
 		0x40404040);
+	if (!conforming && (sor->dc->pdata->default_out->depth == 24))
+		tegra_sor_writel(sor, NV_SOR_LANE4_DRIVE_CURRENT(sor->portnum),
+			0x40);
 
 #if 0
 	tegra_sor_write_field(sor, NV_SOR_LVDS,

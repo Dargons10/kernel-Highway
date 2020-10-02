@@ -59,6 +59,7 @@
 #include <linux/gfp.h>
 #include <linux/migrate.h>
 #include <linux/string.h>
+#include <linux/dma-contiguous.h>
 
 #include <asm/io.h>
 #include <asm/pgalloc.h>
@@ -117,6 +118,29 @@ __setup("norandmaps", disable_randmaps);
 
 unsigned long zero_pfn __read_mostly;
 unsigned long highest_memmap_pfn __read_mostly;
+
+EXPORT_SYMBOL(zero_pfn);
+
+#ifdef CONFIG_UKSM
+unsigned long uksm_zero_pfn __read_mostly;
+struct page *empty_uksm_zero_page;
+
+static int __init setup_uksm_zero_page(void)
+{
+	unsigned long addr;
+	addr = __get_free_pages(GFP_KERNEL | __GFP_ZERO, 0);
+	if (!addr)
+		panic("Oh boy, that early out of memory?");
+
+	empty_uksm_zero_page = virt_to_page((void *) addr);
+	SetPageReserved(empty_uksm_zero_page);
+
+	uksm_zero_pfn = page_to_pfn(empty_uksm_zero_page);
+
+	return 0;
+}
+core_initcall(setup_uksm_zero_page);
+#endif
 
 /*
  * CONFIG_MMU architectures set up ZERO_PAGE in their paging_init()
@@ -240,6 +264,7 @@ void tlb_flush_mmu(struct mmu_gather *tlb)
 		return;
 	tlb->need_flush = 0;
 	tlb_flush(tlb);
+	mmu_notifier_invalidate_range(tlb->mm, tlb->start, tlb->end);
 #ifdef CONFIG_HAVE_RCU_TABLE_FREE
 	tlb_table_flush(tlb);
 #endif
@@ -896,7 +921,13 @@ copy_one_pte(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 		else
 			rss[MM_FILEPAGES]++;
 	}
-
+	
+        /* Should return NULL in vm_normal_page() */
+		uksm_bugon_zeropage(pte);
+	} else {
+		uksm_map_zero_page(pte);
+	}
+	
 out_set_pte:
 	set_pte_at(dst_mm, addr, dst_pte, pte);
 	return 0;
@@ -1067,8 +1098,8 @@ int copy_page_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 	mmun_start = addr;
 	mmun_end   = end;
 	if (is_cow)
-		mmu_notifier_invalidate_range_start(src_mm, mmun_start,
-						    mmun_end);
+		mmu_notifier_invalidate_range_start(vma, mmun_start,
+						    mmun_end, MMU_MIGRATE);
 
 	ret = 0;
 	dst_pgd = pgd_offset(dst_mm, addr);
@@ -1085,7 +1116,8 @@ int copy_page_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 	} while (dst_pgd++, src_pgd++, addr = next, addr != end);
 
 	if (is_cow)
-		mmu_notifier_invalidate_range_end(src_mm, mmun_start, mmun_end);
+		mmu_notifier_invalidate_range_end(vma, mmun_start,
+						  mmun_end, MMU_MIGRATE);
 	return ret;
 }
 
@@ -1137,8 +1169,10 @@ again:
 			ptent = ptep_get_and_clear_full(mm, addr, pte,
 							tlb->fullmm);
 			tlb_remove_tlb_entry(tlb, pte, addr);
-			if (unlikely(!page))
-				continue;
+			if (unlikely(!page)){
+				uksm_unmap_zero_page(ptent);
+ 				continue;
+			}
 			if (unlikely(details) && details->nonlinear_vma
 			    && linear_page_index(details->nonlinear_vma,
 						addr) != page->index)
@@ -1215,6 +1249,8 @@ again:
 		tlb->end = addr;
 
 		tlb_flush_mmu(tlb);
+		mmu_notifier_invalidate_range_free_pages(vma, tlb->start,
+							 tlb->end);
 
 		tlb->start = addr;
 		tlb->end = old_end;
@@ -1303,6 +1339,10 @@ static void unmap_page_range(struct mmu_gather *tlb,
 	BUG_ON(addr >= end);
 	mem_cgroup_uncharge_start();
 	tlb_start_vma(tlb, vma);
+	/* Make sure tlb as proper range so intermediate call to mmu_notifier
+	 * have accurate informations.
+	 */
+	tlb->start = max(tlb->start, addr);
 	pgd = pgd_offset(vma->vm_mm, addr);
 	do {
 		next = pgd_addr_end(addr, end);
@@ -1310,6 +1350,8 @@ static void unmap_page_range(struct mmu_gather *tlb,
 			continue;
 		next = zap_pud_range(tlb, vma, pgd, addr, next, details);
 	} while (pgd++, addr = next, addr != end);
+	mmu_notifier_invalidate_range_free_pages(vma, tlb->start,
+						 min(end, tlb->end));
 	tlb_end_vma(tlb, vma);
 	mem_cgroup_uncharge_end();
 }
@@ -1328,6 +1370,11 @@ static void unmap_single_vma(struct mmu_gather *tlb,
 	end = min(vma->vm_end, end_addr);
 	if (end <= vma->vm_start)
 		return;
+
+	mmu_notifier_invalidate_range_start(vma,
+					    max(start_addr, vma->vm_start),
+					    min(end_addr, vma->vm_end),
+					    MMU_MUNMAP);
 
 	if (vma->vm_file)
 		uprobe_munmap(vma, start, end);
@@ -1356,6 +1403,11 @@ static void unmap_single_vma(struct mmu_gather *tlb,
 		} else
 			unmap_page_range(tlb, vma, start, end, details);
 	}
+
+	mmu_notifier_invalidate_range_end(vma,
+					  max(start_addr, vma->vm_start),
+					  min(end_addr, vma->vm_end),
+					  MMU_MUNMAP);
 }
 
 /**
@@ -1380,12 +1432,8 @@ void unmap_vmas(struct mmu_gather *tlb,
 		struct vm_area_struct *vma, unsigned long start_addr,
 		unsigned long end_addr)
 {
-	struct mm_struct *mm = vma->vm_mm;
-
-	mmu_notifier_invalidate_range_start(mm, start_addr, end_addr);
 	for ( ; vma && vma->vm_start < end_addr; vma = vma->vm_next)
 		unmap_single_vma(tlb, vma, start_addr, end_addr, NULL);
-	mmu_notifier_invalidate_range_end(mm, start_addr, end_addr);
 }
 
 /**
@@ -1407,10 +1455,8 @@ void zap_page_range(struct vm_area_struct *vma, unsigned long start,
 	lru_add_drain();
 	tlb_gather_mmu(&tlb, mm, start, end);
 	update_hiwater_rss(mm);
-	mmu_notifier_invalidate_range_start(mm, start, end);
 	for ( ; vma && vma->vm_start < end; vma = vma->vm_next)
 		unmap_single_vma(&tlb, vma, start, end, details);
-	mmu_notifier_invalidate_range_end(mm, start, end);
 	tlb_finish_mmu(&tlb, start, end);
 }
 
@@ -1433,9 +1479,7 @@ static void zap_page_range_single(struct vm_area_struct *vma, unsigned long addr
 	lru_add_drain();
 	tlb_gather_mmu(&tlb, mm, address, end);
 	update_hiwater_rss(mm);
-	mmu_notifier_invalidate_range_start(mm, address, end);
 	unmap_single_vma(&tlb, vma, address, end, details);
-	mmu_notifier_invalidate_range_end(mm, address, end);
 	tlb_finish_mmu(&tlb, address, end);
 }
 
@@ -1472,6 +1516,8 @@ static inline bool can_follow_write_pte(pte_t pte, unsigned int flags)
 		((flags & FOLL_FORCE) && (flags & FOLL_COW) && pte_dirty(pte));
 }
 
+#define FOLL_CMA 0x10000000
+
 /**
  * follow_page_mask - look up a page descriptor from a user-virtual address
  * @vma: vm_area_struct mapping @address
@@ -1496,6 +1542,7 @@ struct page *follow_page_mask(struct vm_area_struct *vma,
 	spinlock_t *ptl;
 	struct page *page;
 	struct mm_struct *mm = vma->vm_mm;
+	bool replace_page = false;
 
 	*page_mask = 0;
 
@@ -1590,8 +1637,16 @@ split_fallthrough:
 		page = pte_page(pte);
 	}
 
-	if (flags & FOLL_GET)
+	if ((flags & FOLL_CMA) && (flags & FOLL_GET) &&
+	    dma_contiguous_should_replace_page(page))
+		/*
+		 * Don't get ref on page.
+		 * Let __get_user_pages replace the CMA page with non-CMA.
+		 */
+		replace_page = true;
+	else if (flags & FOLL_GET)
 		get_page_foll(page);
+
 	if (flags & FOLL_TOUCH) {
 		if ((flags & FOLL_WRITE) &&
 		    !pte_dirty(pte) && !PageDirty(page))
@@ -1628,6 +1683,8 @@ split_fallthrough:
 unlock:
 	pte_unmap_unlock(ptep, ptl);
 out:
+	if (replace_page)
+		return (struct page *)((ulong)page + 1);
 	return page;
 
 bad_page:
@@ -1651,6 +1708,47 @@ no_page_table:
 	if ((flags & FOLL_DUMP) &&
 	    (!vma->vm_ops || !vma->vm_ops->fault))
 		return ERR_PTR(-EFAULT);
+	return page;
+}
+
+/**
+ * replace_cma_page() - migrate page out of CMA page blocks
+ * @page:	source page to be migrated
+ *
+ * Returns either the old page (if migration was not possible) or the pointer
+ * to the newly allocated page (with additional reference taken).
+ *
+ * get_user_pages() might take a reference to a page for a long period of time,
+ * what prevent such page from migration. This is fatal to the preffered usage
+ * pattern of CMA pageblocks. This function replaces the given user page with
+ * a new one allocated from NON-MOVABLE pageblock, so locking CMA page can be
+ * avoided.
+ */
+static inline struct page *migrate_replace_cma_page(struct page *page)
+{
+	struct page *newpage = alloc_page(GFP_HIGHUSER);
+
+	if (!newpage)
+		goto out;
+
+	/*
+	 * Take additional reference to the new page to ensure it won't get
+	 * freed after migration procedure end.
+	 */
+	get_page_foll(newpage);
+
+	if (migrate_replace_page(page, newpage) == 0) {
+		put_page(newpage);
+		return newpage;
+	}
+
+	put_page(newpage);
+	__free_page(newpage);
+out:
+	/*
+	 * Migration errors in case of get_user_pages() might not
+	 * be fatal to CMA itself, so better don't fail here.
+	 */
 	return page;
 }
 
@@ -1807,7 +1905,9 @@ long __get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 			struct page *page;
 			unsigned int foll_flags = gup_flags;
 			unsigned int page_increm;
+			static DEFINE_MUTEX(s_follow_page_lock);
 
+follow_page_again:
 			/*
 			 * If we have a pending SIGKILL, don't keep faulting
 			 * pages and potentially allocating memory.
@@ -1817,7 +1917,7 @@ long __get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 
 			cond_resched();
 			while (!(page = follow_page_mask(vma, start,
-						foll_flags, &page_mask))) {
+					    foll_flags | FOLL_CMA, &page_mask))) {
 				int ret;
 				unsigned int fault_flags = 0;
 
@@ -1882,6 +1982,51 @@ long __get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 			}
 			if (IS_ERR(page))
 				return i ? i : PTR_ERR(page);
+
+			/* Page would have lsb set when CMA page need replacement. */
+			if (((ulong)page & 0x1) == 0x1) {
+				struct page *old_page;
+				unsigned int fault_flags = 0;
+
+				mutex_lock(&s_follow_page_lock);
+				page = (struct page *)((ulong)page & ~0x1);
+				old_page = page;
+				wait_on_page_locked_timeout(page);
+				page = migrate_replace_cma_page(page);
+				/* migration might be successful. vma mapping
+				 * might have changed if there had been a write
+				 * fault from other accesses before migration
+				 * code locked the page. Follow the page again
+				 * to get the latest mapping. If migration was
+				 * successful, follow again would get
+				 * non-CMA page. If there had been a write
+				 * page fault, follow page and CMA page
+				 * replacement(if necessary) would restart with
+				 * new page.
+				 */
+				if (page == old_page)
+					wait_on_page_locked_timeout(page);
+				if (foll_flags & FOLL_WRITE) {
+					/* page would be marked as old during
+					 * migration. To make it young, call
+					 * handle_mm_fault.
+					 * This to avoid the sanity check
+					 * failures in the calling code, which
+					 * check for pte write permission
+					 * bits.
+					 */
+					fault_flags |= FAULT_FLAG_WRITE;
+					handle_mm_fault(mm, vma,
+						start, fault_flags);
+				}
+				foll_flags = gup_flags;
+				mutex_unlock(&s_follow_page_lock);
+				goto follow_page_again;
+			}
+
+			BUG_ON(dma_contiguous_should_replace_page(page) &&
+				(foll_flags & FOLL_GET));
+
 			if (pages) {
 				pages[i] = page;
 
@@ -1966,75 +2111,6 @@ int fixup_user_fault(struct task_struct *tsk, struct mm_struct *mm,
 	}
 	return 0;
 }
-
-/*
- * get_user_pages() - pin user pages in memory
- * @tsk:	the task_struct to use for page fault accounting, or
- *		NULL if faults are not to be recorded.
- * @mm:		mm_struct of target mm
- * @start:	starting user address
- * @nr_pages:	number of pages from start to pin
- * @write:	whether pages will be written to by the caller
- * @force:	whether to force write access even if user mapping is
- *		readonly. This will result in the page being COWed even
- *		in MAP_SHARED mappings. You do not want this.
- * @pages:	array that receives pointers to the pages pinned.
- *		Should be at least nr_pages long. Or NULL, if caller
- *		only intends to ensure the pages are faulted in.
- * @vmas:	array of pointers to vmas corresponding to each page.
- *		Or NULL if the caller does not require them.
- *
- * Returns number of pages pinned. This may be fewer than the number
- * requested. If nr_pages is 0 or negative, returns 0. If no pages
- * were pinned, returns -errno. Each page returned must be released
- * with a put_page() call when it is finished with. vmas will only
- * remain valid while mmap_sem is held.
- *
- * Must be called with mmap_sem held for read or write.
- *
- * get_user_pages walks a process's page tables and takes a reference to
- * each struct page that each user address corresponds to at a given
- * instant. That is, it takes the page that would be accessed if a user
- * thread accesses the given user virtual address at that instant.
- *
- * This does not guarantee that the page exists in the user mappings when
- * get_user_pages returns, and there may even be a completely different
- * page there in some cases (eg. if mmapped pagecache has been invalidated
- * and subsequently re faulted). However it does guarantee that the page
- * won't be freed completely. And mostly callers simply care that the page
- * contains data that was valid *at some point in time*. Typically, an IO
- * or similar operation cannot guarantee anything stronger anyway because
- * locks can't be held over the syscall boundary.
- *
- * If write=0, the page must not be written to. If the page is written to,
- * set_page_dirty (or set_page_dirty_lock, as appropriate) must be called
- * after the page is finished with, and before put_page is called.
- *
- * get_user_pages is typically used for fewer-copy IO operations, to get a
- * handle on the memory by some means other than accesses via the user virtual
- * addresses. The pages may be submitted for DMA to devices or accessed via
- * their kernel linear mapping (via the kmap APIs). Care should be taken to
- * use the correct cache flushing APIs.
- *
- * See also get_user_pages_fast, for performance critical applications.
- */
-long get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
-		unsigned long start, unsigned long nr_pages, int write,
-		int force, struct page **pages, struct vm_area_struct **vmas)
-{
-	int flags = FOLL_TOUCH;
-
-	if (pages)
-		flags |= FOLL_GET;
-	if (write)
-		flags |= FOLL_WRITE;
-	if (force)
-		flags |= FOLL_FORCE;
-
-	return __get_user_pages(tsk, mm, start, nr_pages, flags, pages, vmas,
-				NULL);
-}
-EXPORT_SYMBOL(get_user_pages);
 
 /**
  * get_dump_page() - pin user page in memory while writing it to core dump
@@ -2593,8 +2669,10 @@ static inline void cow_user_page(struct page *dst, struct page *src, unsigned lo
 			clear_page(kaddr);
 		kunmap_atomic(kaddr);
 		flush_dcache_page(dst);
-	} else
+	} else {
 		copy_user_highpage(dst, src, va, vma);
+	    uksm_cow_page(vma, src);
+	}
 }
 
 /*
@@ -2617,7 +2695,7 @@ static inline void cow_user_page(struct page *dst, struct page *src, unsigned lo
  */
 static int do_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		unsigned long address, pte_t *page_table, pmd_t *pmd,
-		spinlock_t *ptl, pte_t orig_pte)
+		spinlock_t *ptl, pte_t orig_pte, unsigned int flags)
 	__releases(ptl)
 {
 	struct page *old_page, *new_page = NULL;
@@ -2627,6 +2705,10 @@ static int do_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	struct page *dirty_page = NULL;
 	unsigned long mmun_start = 0;	/* For mmu_notifiers */
 	unsigned long mmun_end = 0;	/* For mmu_notifiers */
+	gfp_t gfp = GFP_HIGHUSER_MOVABLE;
+
+	if (IS_ENABLED(CONFIG_CMA) && (flags & FAULT_FLAG_NO_CMA))
+		gfp &= ~__GFP_MOVABLE;
 
 	old_page = vm_normal_page(vma, address, orig_pte);
 	if (!old_page) {
@@ -2790,11 +2872,12 @@ gotten:
 		goto oom;
 
 	if (is_zero_pfn(pte_pfn(orig_pte))) {
-		new_page = alloc_zeroed_user_highpage_movable(vma, address);
+		new_page = alloc_zeroed_user_highpage(gfp, vma, address);
 		if (!new_page)
 			goto oom;
+		uksm_cow_pte(vma, orig_pte);
 	} else {
-		new_page = alloc_page_vma(GFP_HIGHUSER_MOVABLE, vma, address);
+		new_page = alloc_page_vma(gfp, vma, address);
 		if (!new_page)
 			goto oom;
 		cow_user_page(new_page, old_page, address, vma);
@@ -2806,7 +2889,8 @@ gotten:
 
 	mmun_start  = address & PAGE_MASK;
 	mmun_end    = mmun_start + PAGE_SIZE;
-	mmu_notifier_invalidate_range_start(mm, mmun_start, mmun_end);
+	mmu_notifier_invalidate_range_start(vma, mmun_start,
+					    mmun_end, MMU_MIGRATE);
 
 	/*
 	 * Re-check the pte - we dropped the lock
@@ -2817,9 +2901,12 @@ gotten:
 			if (!PageAnon(old_page)) {
 				dec_mm_counter_fast(mm, MM_FILEPAGES);
 				inc_mm_counter_fast(mm, MM_ANONPAGES);
-			}
-		} else
-			inc_mm_counter_fast(mm, MM_ANONPAGES);
+			   }
+		       uksm_bugon_zeropage(orig_pte);
+		} else {
+		       uksm_unmap_zero_page(orig_pte);
+			   inc_mm_counter_fast(mm, MM_ANONPAGES);
+		}
 		flush_cache_page(vma, address, pte_pfn(orig_pte));
 		entry = mk_pte(new_page, vma->vm_page_prot);
 		entry = maybe_mkwrite(pte_mkdirty(entry), vma);
@@ -2829,14 +2916,14 @@ gotten:
 		 * seen in the presence of one thread doing SMC and another
 		 * thread doing COW.
 		 */
-		ptep_clear_flush(vma, address, page_table);
+		ptep_clear_flush_notify(vma, address, page_table);
 		page_add_new_anon_rmap(new_page, vma, address);
 		/*
 		 * We call the notify macro here because, when using secondary
 		 * mmu page tables (such as kvm shadow page tables), we want the
 		 * new page to be mapped directly into the secondary page table.
 		 */
-		set_pte_at_notify(mm, address, page_table, entry);
+		set_pte_at_notify(mm, address, page_table, entry, MMU_MIGRATE);
 		update_mmu_cache(vma, address, page_table);
 		if (old_page) {
 			/*
@@ -2875,7 +2962,8 @@ gotten:
 unlock:
 	pte_unmap_unlock(page_table, ptl);
 	if (mmun_end > mmun_start)
-		mmu_notifier_invalidate_range_end(mm, mmun_start, mmun_end);
+		mmu_notifier_invalidate_range_end(vma, mmun_start,
+						  mmun_end, MMU_MIGRATE);
 	if (old_page) {
 		/*
 		 * Don't let another task, with possibly unlocked vma,
@@ -3154,7 +3242,8 @@ static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	}
 
 	if (flags & FAULT_FLAG_WRITE) {
-		ret |= do_wp_page(mm, vma, address, page_table, pmd, ptl, pte);
+		ret |= do_wp_page(mm, vma, address, page_table, pmd,
+					ptl, pte, flags);
 		if (ret & VM_FAULT_ERROR)
 			ret &= VM_FAULT_ERROR;
 		goto out;
@@ -3180,6 +3269,7 @@ out_release:
 	return ret;
 }
 
+bool is_vma_temporary_stack(struct vm_area_struct *vma);
 /*
  * We enter with non-exclusive mmap_sem (to exclude vma changes,
  * but allow concurrent faults), and pte mapped but not yet locked.
@@ -3212,7 +3302,12 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	/* Allocate our own private page. */
 	if (unlikely(anon_vma_prepare(vma)))
 		goto oom;
-	page = alloc_zeroed_user_highpage_movable(vma, address);
+	if (vma->vm_flags & VM_LOCKED || flags & FAULT_FLAG_NO_CMA ||
+	    is_vma_temporary_stack(vma)) {
+		page = alloc_zeroed_user_highpage(GFP_HIGHUSER, vma, address);
+	} else {
+		page = alloc_zeroed_user_highpage_movable(vma, address);
+	}
 	if (!page)
 		goto oom;
 	/*
@@ -3253,6 +3348,28 @@ oom:
 	return VM_FAULT_OOM;
 }
 
+void do_set_pte(struct vm_area_struct *vma, unsigned long address,
+		struct page *page, pte_t *pte, bool write, bool anon)
+{
+	pte_t entry;
+
+	flush_icache_page(vma, page);
+	entry = mk_pte(page, vma->vm_page_prot);
+	if (write)
+		entry = maybe_mkwrite(pte_mkdirty(entry), vma);
+	if (anon) {
+		inc_mm_counter_fast(vma->vm_mm, MM_ANONPAGES);
+		page_add_new_anon_rmap(page, vma, address);
+	} else {
+		inc_mm_counter_fast(vma->vm_mm, MM_FILEPAGES);
+		page_add_file_rmap(page);
+	}
+	set_pte_at(vma->vm_mm, address, pte, entry);
+
+	/* no need to invalidate: a not-present page won't be cached */
+	update_mmu_cache(vma, address, pte);
+}
+
 /*
  * __do_fault() tries to create a new page mapping. It aggressively
  * tries to share with existing pages, but makes a separate copy if
@@ -3280,6 +3397,11 @@ static int __do_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	struct vm_fault vmf;
 	int ret;
 	int page_mkwrite = 0;
+	gfp_t gfp = GFP_HIGHUSER_MOVABLE;
+
+	if (IS_ENABLED(CONFIG_CMA) && (flags & FAULT_FLAG_NO_CMA))
+		gfp &= ~__GFP_MOVABLE;
+
 
 	/*
 	 * If we do COW later, allocate page befor taking lock_page()
@@ -3290,7 +3412,7 @@ static int __do_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 		if (unlikely(anon_vma_prepare(vma)))
 			return VM_FAULT_OOM;
 
-		cow_page = alloc_page_vma(GFP_HIGHUSER_MOVABLE, vma, address);
+		cow_page = alloc_page_vma(gfp, vma, address);
 		if (!cow_page)
 			return VM_FAULT_OOM;
 
@@ -3670,6 +3792,7 @@ int handle_pte_fault(struct mm_struct *mm,
 {
 	pte_t entry;
 	spinlock_t *ptl;
+	bool fix_prot = false;
 
 	entry = *pte;
 	if (!pte_present(entry)) {
@@ -3690,14 +3813,28 @@ int handle_pte_fault(struct mm_struct *mm,
 	if (pte_numa(entry))
 		return do_numa_page(mm, vma, address, entry, pte, pmd);
 
+	if (vma->vm_ops && vma->vm_ops->fixup_prot && vma->vm_ops->fault &&
+		(entry == pte_modify(entry, vm_get_page_prot(VM_NONE)))) {
+		pgoff_t pgoff = (((address & PAGE_MASK)
+				- vma->vm_start) >> PAGE_SHIFT) + vma->vm_pgoff;
+		if (!vma->vm_ops->fixup_prot(vma, address & PAGE_MASK, pgoff))
+			return VM_FAULT_SIGSEGV; /* access not granted */
+		fix_prot = true;
+	}
+
 	ptl = pte_lockptr(mm, pmd);
 	spin_lock(ptl);
 	if (unlikely(!pte_same(*pte, entry)))
 		goto unlock;
+	if (fix_prot) {
+		entry = pte_modify(entry, vma->vm_page_prot);
+		vm_stat_account(mm, VM_NONE, vma->vm_file, -1);
+		vm_stat_account(mm, vma->vm_flags, vma->vm_file, 1);
+	}
 	if (flags & FAULT_FLAG_WRITE) {
 		if (!pte_write(entry))
 			return do_wp_page(mm, vma, address,
-					pte, pmd, ptl, entry);
+					pte, pmd, ptl, entry, flags);
 		entry = pte_mkdirty(entry);
 	}
 	entry = pte_mkyoung(entry);

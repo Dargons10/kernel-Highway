@@ -182,6 +182,16 @@ struct cs_dbs_tuners {
 	unsigned int freq_step;
 };
 
+struct ex_dbs_tuners {
+	unsigned int ignore_nice_load;
+	unsigned int sampling_rate;
+	unsigned int up_threshold;
+	unsigned int down_differential;
+	unsigned int gboost_min_freq;
+	unsigned int input_event_timeout;
+	unsigned int input_min_freq;
+};
+
 /* Common Governer data across policies */
 struct dbs_data;
 struct common_dbs_data {

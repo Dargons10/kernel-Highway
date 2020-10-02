@@ -372,7 +372,6 @@ int snd_soc_dapm_link_dai_widgets(struct snd_soc_card *card);
 int snd_soc_dapm_new_dai_link_widgets(struct snd_soc_dapm_context *dapm,
 				      struct snd_soc_pcm_runtime *rtd);
 
-/* dapm path setup */
 int snd_soc_dapm_new_widgets(struct snd_soc_dapm_context *dapm);
 void snd_soc_dapm_free(struct snd_soc_dapm_context *dapm);
 int snd_soc_dapm_add_routes(struct snd_soc_dapm_context *dapm,

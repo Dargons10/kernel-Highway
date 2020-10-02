@@ -440,9 +440,12 @@ static int soc_pcm_close(struct snd_pcm_substream *substream)
 					msecs_to_jiffies(rtd->pmdown_time));
 			}
 		} else {
-			/* capture streams can be powered down now */
-			snd_soc_dapm_stream_event(rtd, SNDRV_PCM_STREAM_CAPTURE,
-						  SND_SOC_DAPM_STREAM_STOP);
+			/* start delayed pop wq here for playback streams */
+			rtd->pop_wait = 1;
+			queue_delayed_work(system_power_efficient_wq,
+					   &rtd->delayed_work,
+					   msecs_to_jiffies(rtd->pmdown_time));
+
 		}
 	}
 

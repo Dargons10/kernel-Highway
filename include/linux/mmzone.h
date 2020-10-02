@@ -143,6 +143,11 @@ enum zone_stat_item {
 #endif
 	NR_ANON_TRANSPARENT_HUGEPAGES,
 	NR_FREE_CMA_PAGES,
+	NR_IONCACHE_PAGES,
+#ifdef CONFIG_UKSM
+	NR_UKSM_ZERO_PAGES,
+#endif
+	NR_SWAPCACHE,
 	NR_VM_ZONE_STAT_ITEMS };
 
 /*
@@ -773,10 +778,10 @@ static inline bool pgdat_is_empty(pg_data_t *pgdat)
 extern struct mutex zonelists_mutex;
 void build_all_zonelists(pg_data_t *pgdat, struct zone *zone);
 void wakeup_kswapd(struct zone *zone, int order, enum zone_type classzone_idx);
-bool zone_watermark_ok(struct zone *z, unsigned int order,
-		unsigned long mark, int classzone_idx, int alloc_flags);
-bool zone_watermark_ok_safe(struct zone *z, unsigned int order,
-		unsigned long mark, int classzone_idx, int alloc_flags);
+bool zone_watermark_ok(struct zone *z, int order, unsigned long mark,
+		int classzone_idx, int alloc_flags);
+bool zone_watermark_ok_safe(struct zone *z, int order, unsigned long mark,
+		int classzone_idx, int alloc_flags);
 enum memmap_context {
 	MEMMAP_EARLY,
 	MEMMAP_HOTPLUG,

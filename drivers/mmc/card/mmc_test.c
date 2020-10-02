@@ -885,7 +885,7 @@ static int mmc_test_nonblock_transfer(struct mmc_test_card *test,
 	struct mmc_async_req *cur_areq = &test_areq[0].areq;
 	struct mmc_async_req *other_areq = &test_areq[1].areq;
 	int i;
-	int ret = RESULT_OK;
+	int ret;
 
 	test_areq[0].test = test;
 	test_areq[1].test = test;
@@ -3021,7 +3021,7 @@ static ssize_t mtf_test_write(struct file *file, const char __user *buf,
 	char *data_buf = NULL;
 	long testcase;
 
-	data_buf = kzalloc(count, GFP_KERNEL);
+	data_buf = kzalloc(count+1, GFP_KERNEL);
 	if (data_buf == NULL)
 		return -ENOMEM;
 
@@ -3029,7 +3029,6 @@ static ssize_t mtf_test_write(struct file *file, const char __user *buf,
 		kfree(data_buf);
 		return -EFAULT;
 	}
-	data_buf[strlen(data_buf) - 1] = '\0';
 	if (mmc_test_extract_parameters(data_buf)) {
 		mmc_test_usage(sf);
 		return -EFAULT;
@@ -3202,17 +3201,12 @@ static void mmc_test_remove(struct mmc_card *card)
 	mmc_test_free_dbgfs_file(card);
 }
 
-static void mmc_test_shutdown(struct mmc_card *card)
-{
-}
-
 static struct mmc_driver mmc_driver = {
 	.drv		= {
 		.name	= "mmc_test",
 	},
 	.probe		= mmc_test_probe,
 	.remove		= mmc_test_remove,
-	.shutdown	= mmc_test_shutdown,
 };
 
 static int __init mmc_test_init(void)
@@ -3235,3 +3229,4 @@ module_exit(mmc_test_exit);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Multimedia Card (MMC) host test driver");
 MODULE_AUTHOR("Pierre Ossman");
+

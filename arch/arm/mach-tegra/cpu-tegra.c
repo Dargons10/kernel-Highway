@@ -60,6 +60,9 @@ static struct pm_qos_request cpufreq_max_req;
 static struct pm_qos_request cpufreq_min_req;
 
 static bool force_policy_max;
+static bool hotplug_boost;
+
+int cur_profile;
 
 static int force_policy_max_set(const char *arg, const struct kernel_param *kp)
 {
@@ -147,6 +150,28 @@ static unsigned int user_cap_speed(unsigned int requested_speed)
 		return cpu_user_cap;
 	return requested_speed;
 }
+
+static ssize_t current_power_profile_show(struct cpufreq_policy *policy, char *buf)
+{
+	ssize_t count;
+
+	count = sprintf(buf, "%d\n", cur_profile);
+
+	return count;
+}
+
+static ssize_t current_power_profile_store(struct cpufreq_policy *policy, char *buf, size_t count)
+{
+	sscanf(buf, "%u", &cur_profile);
+
+	return count;
+}
+
+static struct freq_attr attr_current_power_profile = {
+	.attr = {.name = "current_power_profile", .mode = 0644, },
+	.show = current_power_profile_show,
+	.store = current_power_profile_store,
+};
 
 #ifdef CONFIG_TEGRA_THERMAL_THROTTLE
 
@@ -727,13 +752,20 @@ unsigned long tegra_cpu_highest_speed(void) {
 	unsigned long policy_max = ULONG_MAX;
 	unsigned long rate = 0;
 	int i;
+	if (hotplug_boost)
+		policy_max = 0;
 
 	for_each_online_cpu(i) {
-		if (force_policy_max)
+		if (hotplug_boost)
+			policy_max = max(policy_max, policy_max_speed[i]);
+		else if (force_policy_max)
 			policy_max = min(policy_max, policy_max_speed[i]);
 		rate = max(rate, target_cpu_speed[i]);
 	}
-	rate = min(rate, policy_max);
+	if (hotplug_boost)
+		rate = max(rate, policy_max);
+	else
+		rate = min(rate, policy_max);
 	return rate;
 }
 
@@ -879,6 +911,33 @@ static struct notifier_block tegra_cpu_pm_notifier = {
 	.notifier_call = tegra_pm_notify,
 };
 
+static int tegra_hotplug_boost(struct notifier_block *nb, unsigned long event,
+				void *hcpu)
+{
+	int ret = 0;
+
+	switch (event) {
+	case CPU_DOWN_PREPARE:
+		mutex_lock(&tegra_cpu_lock);
+		hotplug_boost = true;
+		tegra_cpu_set_speed_cap_locked(NULL);
+		mutex_unlock(&tegra_cpu_lock);
+		break;
+	case CPU_DOWN_FAILED:
+	case CPU_DEAD:
+		mutex_lock(&tegra_cpu_lock);
+		hotplug_boost = false;
+		tegra_cpu_set_speed_cap_locked(NULL);
+		mutex_unlock(&tegra_cpu_lock);
+		break;
+	}
+	return notifier_from_errno(ret);
+}
+
+static struct notifier_block tegra_hotplug_boost_notifier = {
+	.notifier_call = tegra_hotplug_boost,
+};
+
 static int tegra_cpu_init(struct cpufreq_policy *policy)
 {
 	int idx, ret;
@@ -961,6 +1020,7 @@ static struct notifier_block tegra_cpufreq_policy_nb = {
 
 static struct freq_attr *tegra_cpufreq_attr[] = {
 	&cpufreq_freq_attr_scaling_available_freqs,
+        &attr_current_power_profile,
 #ifdef CONFIG_TEGRA_THERMAL_THROTTLE
 	&throttle,
 #endif
@@ -1016,7 +1076,11 @@ static int __init tegra_cpufreq_init(void)
 
 	if (ret)
 		return ret;
-
+	ret = register_hotcpu_notifier(&tegra_hotplug_boost_notifier);
+	if (ret)
+		return ret;
+ 
+ 
 	return cpufreq_register_driver(&tegra_cpufreq_driver);
 }
 

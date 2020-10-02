@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2014, NVIDIA CORPORATION.  All rights reserved.
- * Copyright (C) 2016 XiaoMi, Inc.
+
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -72,21 +72,6 @@ static int ad5823_set_position(struct ad5823_info *info, u32 position)
 			position = info->config.pos_actual_high;
 	}
 
-#ifdef TEGRA_12X_OR_HIGHER_CONFIG
-	ret = camera_dev_sync_clear(info->csync_dev);
-	ret |= camera_dev_sync_wr_add(info->csync_dev,
-			AD5823_VCM_MOVE_TIME,
-			AD5823_MOVE_TIME_VALUE);
-	ret |= camera_dev_sync_wr_add(info->csync_dev,
-			AD5823_MODE,
-			0);
-	ret |= camera_dev_sync_wr_add(info->csync_dev,
-			AD5823_VCM_CODE_MSB,
-			((position >> 8) & 0x3) | (1 << 2));
-	ret |= camera_dev_sync_wr_add(info->csync_dev,
-			AD5823_VCM_CODE_LSB,
-			position & 0xFF);
-#else
 	ret |= regmap_write(info->regmap, AD5823_VCM_MOVE_TIME,
 				AD5823_MOVE_TIME_VALUE);
 	ret |= regmap_write(info->regmap, AD5823_MODE, 0);
@@ -94,7 +79,8 @@ static int ad5823_set_position(struct ad5823_info *info, u32 position)
 		((position >> 8) & 0x3) | (1 << 2));
 	ret |= regmap_write(info->regmap, AD5823_VCM_CODE_LSB,
 		position & 0xFF);
-#endif
+
+        pr_err("Focuser position: %d\n", position);
 
 	return ret;
 }
@@ -276,7 +262,7 @@ static int ad5823_probe(struct i2c_client *client,
 	};
 
 
-	dev_dbg(&client->dev, "ad5823: probing sensor.\n");
+	pr_err("[AD5823]: probing sensor.\n");
 
 	info = devm_kzalloc(&client->dev, sizeof(*info), GFP_KERNEL);
 	if (!info) {
@@ -329,14 +315,6 @@ static int ad5823_probe(struct i2c_client *client,
 		goto ERROR_RET;
 	}
 
-#ifdef TEGRA_12X_OR_HIGHER_CONFIG
-	err = camera_dev_add_regmap(&info->csync_dev, "ad5823", info->regmap);
-	if (err < 0) {
-		dev_err(&client->dev, "%s unable i2c frame sync\n", __func__);
-		goto ERROR_RET;
-	}
-#endif
-
 	if (info->regulator)
 		regulator_disable(info->regulator);
 
@@ -359,6 +337,7 @@ static int ad5823_probe(struct i2c_client *client,
 	info->miscdev   = ad5823_device;
 
 	i2c_set_clientdata(client, info);
+	pr_err("[AD5823]: end of probing sensor.\n");
 
 	return 0;
 

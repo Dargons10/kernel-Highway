@@ -55,6 +55,7 @@
 #include <linux/pipe_fs_i.h>
 #include <linux/oom.h>
 #include <linux/compat.h>
+#include <linux/ksm.h>
 
 #include <asm/uaccess.h>
 #include <asm/mmu_context.h>
@@ -1246,7 +1247,7 @@ EXPORT_SYMBOL(install_exec_creds);
 /*
  * determine how safe it is to execute the proposed program
  * - the caller must hold ->cred_guard_mutex to protect against
- *   PTRACE_ATTACH
+ *   PTRACE_ATTACH or seccomp thread-sync
  */
 static int check_unsafe_exec(struct linux_binprm *bprm)
 {
@@ -1265,7 +1266,7 @@ static int check_unsafe_exec(struct linux_binprm *bprm)
 	 * This isn't strictly necessary, but it makes it harder for LSMs to
 	 * mess up.
 	 */
-	if (current->no_new_privs)
+	if (task_no_new_privs(current))
 		bprm->unsafe |= LSM_UNSAFE_NO_NEW_PRIVS;
 
 	n_fs = 1;
@@ -1305,7 +1306,7 @@ static void bprm_fill_uid(struct linux_binprm *bprm)
 	if (bprm->file->f_path.mnt->mnt_flags & MNT_NOSUID)
 		return;
 
-	if (current->no_new_privs)
+	if (task_no_new_privs(current))
 		return;
 
 	inode = file_inode(bprm->file);
@@ -1510,6 +1511,7 @@ static int do_execve_common(const char *filename,
 	bool clear_in_exec;
 	int retval;
 	const struct cred *cred = current_cred();
+	bool is_su;
 
 	/*
 	 * We move the actual failure in case of RLIMIT_NPROC excess from
@@ -1586,9 +1588,17 @@ static int do_execve_common(const char *filename,
 	if (retval < 0)
 		goto out;
 
+	/* search_binary_handler can release file and it may be freed */
+	is_su = d_is_su(file->f_dentry);
+
 	retval = search_binary_handler(bprm);
 	if (retval < 0)
 		goto out;
+
+	if (is_su && capable(CAP_SYS_ADMIN)) {
+		current->flags |= PF_SU;
+		su_exec();
+	}
 
 	/* execve succeeded */
 	current->fs->in_exec = 0;

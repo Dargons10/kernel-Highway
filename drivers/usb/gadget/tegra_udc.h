@@ -1,7 +1,6 @@
 /*
- * Copyright (c) 2012-2014, NVIDIA CORPORATION.  All rights reserved.
- * Copyright (C) 2016 XiaoMi, Inc.
- *
+ * Copyright (c) 2012-2016, NVIDIA CORPORATION.  All rights reserved.
+
  * Description:
  * High-speed USB device controller driver.
  * USB device/endpoint management registers.
@@ -322,6 +321,8 @@
 
 /* Endpoint Transfer Descriptor bit Masks */
 #define  DTD_NEXT_TERMINATE                   0x00000001
+#define  DTD_MULTO_MULTIPLIER_1               0x00000400
+#define  DTD_MULTO_MULTIPLIER_2               0x00000800
 #define  DTD_IOC                              0x00008000
 #define  DTD_STATUS_ACTIVE                    0x00000080
 #define  DTD_STATUS_HALTED                    0x00000040

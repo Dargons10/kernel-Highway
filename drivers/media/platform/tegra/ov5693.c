@@ -3444,7 +3444,7 @@ static int ov5693_probe(
 	};
 
 
-	dev_dbg(&client->dev, "%s\n", __func__);
+    pr_err("[OV5693]: probing sensor.\n");
 	info = devm_kzalloc(&client->dev, sizeof(*info), GFP_KERNEL);
 	if (info == NULL) {
 		dev_err(&client->dev, "%s: kzalloc error\n", __func__);
@@ -3543,7 +3543,7 @@ static int ov5693_probe(
 		return -ENODEV;
 	}
 
-	dev_dbg(&client->dev, "ov5693 sensor driver loading done\n");
+	pr_err("[OV5693]: end of probing sensor.\n");
 	return 0;
 }
 

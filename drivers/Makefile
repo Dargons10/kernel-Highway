@@ -160,3 +160,6 @@ obj-$(CONFIG_NTB)		+= ntb/
 obj-$(CONFIG_ANDROID)           += android/
 obj-$(CONFIG_MIPI_BIF)		+= mipi_bif/
 obj-$(CONFIG_TSPDRV)		+= tspdrv/
+obj-$(CONFIG_ANDROID)		+= android/
+obj-$(CONFIG_TSPDRV)		+= tspdrv/
+

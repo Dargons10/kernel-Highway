@@ -76,6 +76,7 @@ static int uid_stat_show(struct seq_file *m, void *v)
 {
 	struct uid_entry *uid_entry;
 	struct task_struct *task, *temp;
+
 	cputime_t utime;
 	cputime_t stime;
 	unsigned long bkt;
@@ -110,6 +111,7 @@ static int uid_stat_show(struct seq_file *m, void *v)
 		uid_entry->active_stime += stime;
 		uid_entry->active_power += task->cpu_power;
 	} while_each_thread(temp, task);
+
 	read_unlock(&tasklist_lock);
 
 	hash_for_each(hash_table, bkt, uid_entry, hash) {
@@ -208,7 +210,9 @@ static int process_notifier(struct notifier_block *self,
 		return NOTIFY_OK;
 
 	mutex_lock(&uid_lock);
+
 	uid = from_kuid_munged(current_user_ns(), task_uid(task));
+
 	uid_entry = find_or_register_uid(uid);
 	if (!uid_entry) {
 		pr_err("%s: failed to find uid %d\n", __func__, uid);
@@ -220,6 +224,7 @@ static int process_notifier(struct notifier_block *self,
 	uid_entry->stime += stime;
 	uid_entry->power += task->cpu_power;
 	task->cpu_power = ULLONG_MAX;
+
 
 exit:
 	mutex_unlock(&uid_lock);

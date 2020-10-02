@@ -33,4 +33,11 @@ struct psci_operations {
 
 extern struct psci_operations psci_ops;
 
+#ifdef CONFIG_ARM_PSCI
+int psci_init(void);
+#else
+static inline int psci_init(void) { return 0; }
+#endif
+
+
 #endif /* __ASM_ARM_PSCI_H */

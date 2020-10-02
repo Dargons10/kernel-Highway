@@ -15,12 +15,10 @@
 #include <linux/reboot.h>
 #include <linux/writeback.h>
 #include <linux/dyn_sync_cntrl.h>
-//#include <linux/blkdev.h>
-//#include <linux/blk_types.h>
-//#include <linux/elevator.h>
-#ifdef CONFIG_STATE_NOTIFIER
-#include <linux/state_notifier.h>
-#endif
+
+#include <linux/fb.h>
+
+
 
 // fsync_mutex protects dyn_fsync_active during suspend / late resume transitions
 static DEFINE_MUTEX(fsync_mutex);
@@ -30,10 +28,9 @@ static DEFINE_MUTEX(fsync_mutex);
 
 bool suspend_active __read_mostly = false;
 bool dyn_fsync_active __read_mostly = DYN_FSYNC_ACTIVE_DEFAULT;
+static struct notifier_block fb_notif;
 
-#ifdef CONFIG_STATE_NOTIFIER
-static struct notifier_block notif;
-#endif
+
 
 extern void sync_filesystems(int wait);
 
@@ -120,37 +117,48 @@ static int dyn_fsync_notify_sys(struct notifier_block *this, unsigned long code,
 	return NOTIFY_DONE;
 }
 
-#ifdef CONFIG_STATE_NOTIFIER
-static int state_notifier_callback(struct notifier_block *this,
-				unsigned long event, void *data)
+
+static int fb_notifier_callback(struct notifier_block *this, unsigned long event, void *data)
 {
-	switch (event) {
-		case STATE_NOTIFIER_ACTIVE:
-			mutex_lock(&fsync_mutex);
-			suspend_active = true;
-			mutex_unlock(&fsync_mutex);
-	        pr_warn("dynamic fsync: damn son, I'M ACTIVE-STATE#####");
-			break;
-		case STATE_NOTIFIER_SUSPEND:
-			mutex_lock(&fsync_mutex);
-			
-			suspend_active = false;
+ 	struct fb_event *evdata = data;
+  	int *blank;
+  
+  	if (evdata && evdata->data && event == FB_EVENT_BLANK) {
+  		blank = evdata->data;
+  		switch (*blank) {
+  			case FB_BLANK_UNBLANK:
+  				//display on
+				pr_err("RESUME event for dynamic fsync\n");
+				mutex_lock(&fsync_mutex);
+				suspend_active = true;
+				mutex_unlock(&fsync_mutex);
+  				break;
+  			case FB_BLANK_POWERDOWN:
+  			case FB_BLANK_HSYNC_SUSPEND:
+  			case FB_BLANK_VSYNC_SUSPEND:
+  			case FB_BLANK_NORMAL:
+  				//display off
+				pr_err("SUSPEND event for dynamic fsync\n");
+				mutex_lock(&fsync_mutex);
 
-			if (dyn_fsync_active) 
-			{
-				dyn_fsync_force_flush();
-			}
 			
-			mutex_unlock(&fsync_mutex);
-	        pr_warn("dynamic fsync: damn son, I'M SUSPENDED-STATE#####");
-			break;
-		default:
-			break;
-	}
+				suspend_active = false;
 
-	return NOTIFY_OK;
+
+				if (dyn_fsync_active) 
+				{
+					dyn_fsync_force_flush();
+				}
+			
+				mutex_unlock(&fsync_mutex);
+  				break;
+  		}
+         }
+ 
+ 	return NOTIFY_OK;
+
 }
-#endif
+
 
 // Module structures
 
@@ -220,25 +228,13 @@ static int dyn_fsync_init(void)
 		kobject_put(dyn_fsync_kobj);
 	}
 
-#ifdef CONFIG_STATE_NOTIFIER
-	notif.notifier_call = state_notifier_callback;
-	if (state_register_client(&notif))
-	{
-		pr_err("%s: Failed to register lcd callback\n", __func__);
 
-		unregister_reboot_notifier(&dyn_fsync_notifier);
-
-		atomic_notifier_chain_unregister(&panic_notifier_list,
-			&dyn_fsync_panic_block);
-
-		if (dyn_fsync_kobj != NULL)
-			kobject_put(dyn_fsync_kobj);
-
-		return -EFAULT;
-	}
-#endif
-
-	pr_info("%s dynamic fsync initialisation complete\n", __FUNCTION__);
+        fb_notif.notifier_call = fb_notifier_callback;
+  	if (fb_register_client(&fb_notif) != 0)
+  		pr_err("%s: failed to register fb callback\n", __func__);
+        else
+  		pr_err("%s: fb callback registered\n", __func__);
+("%s dynamic fsync initialisation complete\n", __FUNCTION__);
 
 	return sysfs_result;
 }
@@ -254,9 +250,9 @@ static void dyn_fsync_exit(void)
 	if (dyn_fsync_kobj != NULL)
 		kobject_put(dyn_fsync_kobj);
 
-#ifdef CONFIG_STATE_NOTIFIER
-	state_unregister_client(&notif);
-#endif		
+	
+        fb_unregister_client(&fb_notif);
+		
 
 	pr_info("%s dynamic fsync unregistration complete\n", __FUNCTION__);
 }

@@ -75,7 +75,7 @@ MODULE_DEVICE_TABLE(i2c, pca953x_id);
 #define MAX_BANK 5
 #define BANK_SZ 8
 
-#define NBANK(chip) DIV_ROUND_UP(chip->gpio_chip.ngpio, BANK_SZ)
+#define NBANK(chip) (chip->gpio_chip.ngpio / BANK_SZ)
 
 struct pca953x_chip {
 	unsigned gpio_start;
@@ -308,7 +308,7 @@ static int pca953x_gpio_get_value(struct gpio_chip *gc, unsigned off)
 		return 0;
 	}
 
-	return (reg_val & (1u << off)) ? 1 : 0;
+	return (reg_val & (1u << (off % BANK_SZ))) ? 1 : 0;
 }
 
 static void pca953x_gpio_set_value(struct gpio_chip *gc, unsigned off, int val)
@@ -866,3 +866,4 @@ module_exit(pca953x_exit);
 MODULE_AUTHOR("eric miao <eric.miao@marvell.com>");
 MODULE_DESCRIPTION("GPIO expander driver for PCA953x");
 MODULE_LICENSE("GPL");
+

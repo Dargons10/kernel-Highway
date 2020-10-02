@@ -4,7 +4,7 @@
  * Copyright (C) 2010 Google, Inc.
  * Author: Erik Gilling <konkers@android.com>
  *
- * Copyright (c) 2010-2014, NVIDIA CORPORATION, All rights reserved.
+ * Copyright (c) 2010-2016, NVIDIA CORPORATION, All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -1987,6 +1987,60 @@ static void tegra_dc_hdmi_disable(struct tegra_dc *dc)
 	clk_disable_unprepare(hdmi->clk);
 	tegra_dvfs_set_rate(hdmi->clk, 0);
 }
+
+
+/* To determine the best parent clock rate for a nominal HDMI pixel clock
+ * rate for T124 host1x display controller
+ * o inputs:
+ *  - dc: pointer to the display controller
+ *  - parent_clk: pointer to the parent clock
+ *  - pclk: rate of nominal HDMI pixel clock in Hz
+ * o outputs:
+ *  - return: best parent clock rate in Hz
+ */
+static unsigned long  tegra12x_hdmi_determine_parent(
+	const struct tegra_dc *dc, struct clk *parent_clk, int pclk)
+{
+	/* T124 hdmi pclk:
+	 *   parentClk = pclk * m  (m=1,1.5,2,2.5,...,128.5)
+	 *   (refclk * n) = pclk * m  (n=1,1.5,2,2.5,...,128.5)
+	 *     (no half resolutions for m due to uneven out duty cycle)
+	 *   (refclk * N / 2) = pclk * m  (N=2,3,4,...,257)
+	 *   m = (refclk / 2 * N) / pclk  (m=1,2,3,...,128)
+	 *     looking for N to make m whole number
+	 */
+	int  n, m;
+	int  b, fr, f;
+
+	/* following parameters should come from parent clock */
+	const int  ref  = 12000000;   /* reference clock to parent */
+	const int  pmax = 600000000;  /* max freq of parent clock */
+
+	b = 0;
+	fr = 1000;
+	for (n = 4; (ref / 2 * n) <= pmax; n++) {
+		if ((ref / 2 * n) < pclk)  /* too low */
+			continue;
+		m = DIV_ROUND_UP((ref / 2 * n), (pclk / 1000));
+		f = m % 1000;  /* fractional parts */
+		f = (0 == f) ? f : (1000 - f);  /* round-up */
+		if (0 == f) {  /* exact match */
+			if ((ref / 2 * b) < 100000000) {
+				/* parent clock runs at a minumum of 100MHz */
+				continue;
+			}
+			b = n;
+			fr = f;
+			break;
+		} else if (f < fr) {
+			b = n;
+			fr = f;
+		}
+	}
+
+	return (unsigned long)(ref / 2 * b);
+}
+
 
 static long tegra_dc_hdmi_setup_clk(struct tegra_dc *dc, struct clk *clk)
 {

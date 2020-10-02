@@ -180,9 +180,100 @@ static int __init psci_init(void)
 	} else if (!strcmp("smc", method)) {
 		invoke_psci_fn = __invoke_psci_fn_smc;
 	} else {
-		pr_warning("invalid \"method\" property: %s\n", method);
+		pr_warn("invalid \"method\" property: %s\n", method);
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static void psci_sys_reset(enum reboot_mode reboot_mode, const char *cmd)
+{
+	invoke_psci_fn(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0);
+}
+
+static void psci_sys_poweroff(void)
+{
+	invoke_psci_fn(PSCI_0_2_FN_SYSTEM_OFF, 0, 0, 0);
+}
+
+static int psci_restart_notify(struct notifier_block *nb,
+			    unsigned long action, void *data)
+{
+	enum reboot_mode mode = (enum reboot_mode)action;
+	const char *cmd = (const char *)data;
+
+	/* restart the system */
+	psci_sys_reset(mode, cmd);
+
+	/* we should not reach here */
+	return NOTIFY_OK;
+}
+
+static struct notifier_block psci_restart_nb = {
+	.notifier_call = psci_restart_notify,
+	.priority = 128, /* default restart handler */
+};
+
+/*
+ * PSCI Function IDs for v0.2+ are well defined so use
+ * standard values.
+ */
+static int psci_0_2_init(struct device_node *np)
+{
+	int err, ver;
+
+	err = get_set_conduit_method(np);
+
+	if (err)
+
 		goto out_put_node;
 	}
+
+	pr_info("Using standard PSCI v0.2 function IDs\n");
+	psci_function_id[PSCI_FN_CPU_SUSPEND] = PSCI_0_2_FN_CPU_SUSPEND;
+	psci_ops.cpu_suspend = psci_cpu_suspend;
+
+	psci_function_id[PSCI_FN_CPU_OFF] = PSCI_0_2_FN_CPU_OFF;
+	psci_ops.cpu_off = psci_cpu_off;
+
+	psci_function_id[PSCI_FN_CPU_ON] = PSCI_0_2_FN_CPU_ON;
+	psci_ops.cpu_on = psci_cpu_on;
+
+	psci_function_id[PSCI_FN_MIGRATE] = PSCI_0_2_FN_MIGRATE;
+	psci_ops.migrate = psci_migrate;
+
+	psci_function_id[PSCI_FN_AFFINITY_INFO] = PSCI_0_2_FN_AFFINITY_INFO;
+	psci_ops.affinity_info = psci_affinity_info;
+
+	psci_function_id[PSCI_FN_MIGRATE_INFO_TYPE] =
+		PSCI_0_2_FN_MIGRATE_INFO_TYPE;
+	psci_ops.migrate_info_type = psci_migrate_info_type;
+
+	pm_power_off = psci_sys_poweroff;
+
+	/* register restart handler */
+	err = register_restart_handler(&psci_restart_nb);
+
+out_put_node:
+	of_node_put(np);
+	return err;
+}
+
+/*
+ * PSCI < v0.2 get PSCI Function IDs via DT.
+ */
+static int psci_0_1_init(struct device_node *np)
+{
+	u32 id;
+	int err;
+
+	err = get_set_conduit_method(np);
+
+	if (err)
+		goto out_put_node;
+
+	pr_info("Using PSCI v0.1 Function IDs from DT\n");
+
 
 	if (!of_property_read_u32(np, "cpu_suspend", &id)) {
 		psci_function_id[PSCI_FN_CPU_SUSPEND] = id;

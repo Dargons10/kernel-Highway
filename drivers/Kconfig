@@ -174,4 +174,9 @@ source "drivers/android/Kconfig"
 
 source "drivers/tspdrv/Kconfig"
 
+source "drivers/android/Kconfig"
+
+source "drivers/tspdrv/Kconfig"
+
+
 endmenu
